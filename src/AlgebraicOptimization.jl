@@ -1,6 +1,6 @@
 """ Some description of ths package
 """
-module AlgebraicTemplate
+module AlgebraicOptimization
 
 export hello
 
