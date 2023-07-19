@@ -1,5 +1,5 @@
-name = "AlgebraicTemplate"
-uuid = "b66562e1-fa90-4e8b-9505-c909188fab76"
+name = "AlgebraicOptimization"
+uuid = "a72ceada-00ec-4ad9-90d3-37b40eaed052"
 license = "MIT"
 authors = ["AlgebraicJulia Developer <email@algebraicjulia.org>"]
 version = "0.0.1"

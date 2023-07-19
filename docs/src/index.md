@@ -1,7 +1,7 @@
-# AlgebraicTemplate.jl
+# AlgebraicOptimization.jl
 
 ```@meta
-CurrentModule = AlgebraicTemplate
+CurrentModule = AlgebraicOptimization
 ```
 
-`AlgebraicTemplate.jl` is a Julia library for...
+`AlgebraicOptimization.jl` is a Julia library for...
