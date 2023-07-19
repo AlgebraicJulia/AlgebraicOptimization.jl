@@ -2,6 +2,6 @@ using Test
 
 using AlgebraicOptimization
 
-@testset "Core" begin
-  include("core.jl")
+@testset "Open Optimization Problems" begin
+  include("OpenProblems.jl")
 end
