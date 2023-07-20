@@ -10,4 +10,4 @@ using AlgebraicOptimization
 #
 # We provide the `hello(string)` method which prints "Hello, `string`!"
 
-hello("World")
+#hello("World")

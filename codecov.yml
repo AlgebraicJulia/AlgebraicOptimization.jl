@@ -1,3 +1,6 @@
+codecov: 
+  token: 9a6d290f-65ad-43ab-8065-30b97c381f64
+
 coverage:
   precision: 2
   status:
