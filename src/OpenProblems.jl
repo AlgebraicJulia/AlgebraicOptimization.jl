@@ -69,6 +69,7 @@ function induced_vars(d::AbstractUWD, ps::Vector{OpenProblem}, inclusions::Funct
     return pushout(total_portmap, FinFunction(subpart(d, :junction), nparts(d, :Junction)))
 end
 
+#=
 # Takes a FinFunction from N->M and returns the induced linear map R^M->R^N
 function induced_matrix(dom::Int, codom::Int, f::Vector{Int})::Matrix{Float64}
     length(f) == dom && max(f...) <= codom || error("Invalid FinFunction.")
@@ -80,6 +81,20 @@ function induced_matrix(dom::Int, codom::Int, f::Vector{Int})::Matrix{Float64}
     end
     return res
 end
+=#
+
+function induced_matrix(intmap, f::FinFunction, vmap)::Matrix{Float64}
+    # length(f) == dom && max(f...) <= codom || error("Invalid FinFunction.")
+    res = zeros(length(dom(intmap)), length(dom(vmap)))
+
+    for k in 1:length(dom(f))
+        coords = zip(preimage(intmap,k),preimage(vmap,f(k)))
+        for coord in coords
+            res[coord[1],coord[2]] = 1
+        end
+    end
+    return res
+end
 
 induced_matrix(f::FinFunction) = induced_matrix(length(dom(f)), length(codom(f)), f.func)
 
@@ -87,11 +102,13 @@ induced_matrix(f::FinFunction) = induced_matrix(length(dom(f)), length(codom(f))
 # `var_map` should be the left leg of the induced variable pushout.
 # `inclusions` should be a function mapping box numbers to the inclusion of that box's variables
 # into the disjoint union of all the boxes' variables.
-function induced_objective(d::AbstractUWD, ps::Vector{OpenProblem}, var_map::FinFunction, inclusions::Function)
-    proj_mats = Matrix[]
+function induced_objective(d::AbstractUWD, ps::Vector{OpenProblem}, var_map::FinFunction, inclusions::Function, vmap)
+# function induced_objective(d::AbstractUWD, ps::Vector{OpenProblem}, var_map::FinFunction, inclusions::Function)
+        proj_mats = Matrix[]
     for b in parts(d, :Box)
         inc = compose(inclusions(b), var_map)
-        push!(proj_mats, induced_matrix(inc))
+        # push!(proj_mats, induced_matrix(inc))
+        push!(proj_mats, induced_matrix(ps[b].pint,inc,vmap))
     end
     return z::Vector -> sum([ps[b](proj_mats[b]*z) for b in 1:length(ps)])
 end
@@ -121,7 +138,8 @@ function oapply(d::AbstractUWD, ps::Vector{OpenProblem})
     total_vportmap = copair([compose(internalmap(ps[i]),portmap(ps[i]), inclusions(i)) for i in 1:length(ps)])
     vmap = FinFunction(vcat([repeat([i],length(preimage(total_vportmap,preimage(legs(Mpo)[1],i)[1]))) for i in 1:length(codom(legs(Mpo)[1]))]...))
 
-    obj = induced_objective(d, ps, legs(Mpo)[1], inclusions)
+    # obj = induced_objective(d, ps, legs(Mpo)[1], inclusions)
+    obj = induced_objective(d, ps, legs(Mpo)[1], inclusions,vmap)
 
     junction_map = legs(Mpo)[2]
     outer_junction_map = FinFunction(subpart(d, :outer_junction), nparts(d, :Junction))
