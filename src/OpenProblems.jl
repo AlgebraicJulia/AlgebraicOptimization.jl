@@ -119,7 +119,7 @@ function oapply(d::AbstractUWD, ps::Vector{OpenProblem})
     #println(typeof(Mpo))
 
     total_vportmap = copair([compose(internalmap(ps[i]),portmap(ps[i]), inclusions(i)) for i in 1:length(ps)])
-    vmap = vcat([repeat([i],length(preimage(total_vportmap,preimage(legs(Mpo)[1],i)[1]))) for i in 1:4]...)
+    vmap = FinFunction(vcat([repeat([i],length(preimage(total_vportmap,preimage(legs(Mpo)[1],i)[1]))) for i in 1:length(codom(legs(Mpo)[1]))]...))
 
     obj = induced_objective(d, ps, legs(Mpo)[1], inclusions)
 
@@ -130,7 +130,7 @@ function oapply(d::AbstractUWD, ps::Vector{OpenProblem})
         length(apex(Mpo)),
         obj,
         compose(outer_junction_map, junction_map),
-        FinFunction(vmap)
+        vmap
     )
 end
 
