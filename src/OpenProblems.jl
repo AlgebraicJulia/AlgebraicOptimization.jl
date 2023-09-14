@@ -23,11 +23,14 @@ struct OpenProblem
     vars::Int
     objective::Function
     p::FinFunction
-    OpenProblem(evs, vs, obj, p) = dom(p) != FinSet(evs) || codom(p) != FinSet(vs) ?
-        error("Invalid portmap") : new(evs, vs, obj, p)
+    pint::FinFunction
+    OpenProblem(evs, vs, obj, p, pint) = dom(p) != FinSet(evs) || codom(p) != FinSet(vs) ?
+        error("Invalid portmap") : new(evs, vs, obj, p, pint)
 end
 # Convenience constructor when `vars`==`exposed_vars` and `p` is the identity function
-OpenProblem(nvars, obj) = OpenProblem(nvars,nvars,obj,FinFunction(1:nvars))
+OpenProblem(nvars::Int, obj) = OpenProblem(nvars,nvars,obj,FinFunction(1:nvars),FinFunction(1:nvars))
+OpenProblem(vvars::Vector{Int}, obj) = OpenProblem(length(vvars),length(vvars),obj,FinFunction(1:length(vvars)),
+    FinFunction(vcat([repeat([i],vvars[i]) for i in 1:length(vvars)]...),sum(vvars),length(vvars)))
 
 # Make `OpenProblem`s callable
 (p::OpenProblem)(z::Vector) = p.objective(z)
@@ -36,6 +39,7 @@ nvars(p::OpenProblem) = p.vars
 n_exposed_vars(p::OpenProblem) = p.exposed_vars
 objective(p::OpenProblem) = p.objective
 portmap(p::OpenProblem) = p.p
+internalmap(p::OpenProblem) = p.pint
 
 # Open problems as a UWD algebra
 ################################
@@ -114,6 +118,9 @@ function oapply(d::AbstractUWD, ps::Vector{OpenProblem})
     Mpo = induced_vars(d, ps, inclusions)
     #println(typeof(Mpo))
 
+    total_vportmap = copair([compose(internalmap(ps[i]),portmap(ps[i]), inclusions(i)) for i in 1:length(ps)])
+    vmap = vcat([repeat([i],length(preimage(total_vportmap,preimage(legs(Mpo)[1],i)[1]))) for i in 1:4]...)
+
     obj = induced_objective(d, ps, legs(Mpo)[1], inclusions)
 
     junction_map = legs(Mpo)[2]
@@ -122,7 +129,8 @@ function oapply(d::AbstractUWD, ps::Vector{OpenProblem})
         length(induced_ports(d)),
         length(apex(Mpo)),
         obj,
-        compose(outer_junction_map, junction_map)
+        compose(outer_junction_map, junction_map),
+        FinFunction(vmap)
     )
 end
 
