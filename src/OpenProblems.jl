@@ -3,7 +3,7 @@
 module OpenProblems
 
 export MinimizationProblem, DualMaxProblem, nvars, n_exposed_vars, portmap, objective, gradient_flow,
-    primal_solution
+    primal_solution, primal_objective, induced_vars, induced_matrix, n_primal_vars
 
 using Catlab
 using AlgebraicDynamics.UWDDynam
@@ -62,8 +62,8 @@ DualMaxProblem(nvars, pnvars, obj) = DualMaxProblem(nvars,nvars,pnvars,obj,FinFu
 nvars(p::AbstractProblem) = p.vars
 n_exposed_vars(p::AbstractProblem) = p.exposed_vars
 objective(p::AbstractProblem) = p.objective
-primal_objective(p::DualMaxProblem, λ::Vector) = x -> objective(p)(x,λ)
-dual_objective(p::DualMaxProblem, x::Vector) = λ ->  objective(p)(x,λ)
+primal_objective(p::DualMaxProblem, λ) = x -> objective(p)(x,λ)
+dual_objective(p::DualMaxProblem, x) = λ ->  objective(p)(x,λ)
 portmap(p::AbstractProblem) = p.p
 
 n_primal_vars(p::DualMaxProblem) = p.primal_vars
@@ -85,7 +85,7 @@ induced_ports(d::AbstractUWD) = nparts(d, :OuterPort)
 induced_ports(d::RelationDiagram) = subpart(d, [:outer_junction, :variable])
 
 # Returns the pushout which induces the new set of variables
-function induced_vars(d::AbstractUWD, ps::Vector{AbstractProblem}, inclusions::Function)
+function induced_vars(d::AbstractUWD, ps::Vector, inclusions::Function)
     for b in parts(d, :Box)
         fills(d, b, ps[b]) || error("$(ps[b]) does not fill box $b")
     end
@@ -97,7 +97,7 @@ function induced_vars(d::AbstractUWD, ps::Vector{AbstractProblem}, inclusions::F
 end
 
 # Takes a FinFunction from N->M and returns the induced linear map R^M->R^N
-function induced_matrix(dom::Int, codom::Int, f::Vector{Int})::Matrix{Float64}
+function induced_matrix(dom::Int, codom::Int, f#=::Vector{Int}=#)::Matrix{Float64}
     length(f) == dom && max(f...) <= codom || error("Invalid FinFunction.")
     res = zeros(dom, codom)
     for (i,j) in Iterators.product(1:dom, 1:codom)
@@ -221,6 +221,16 @@ gradient_flow(p::MinimizationProblem, grad::Function #=Function × R^N->\R^N=#) 
 )
 
 function gradient_flow(p::DualMaxProblem)
+    x(y) = optimize(primal_objective(p,y), zeros(n_primal_vars(p)), NewtonTrustRegion(), autodiff=:forward).minimizer
+    return ContinuousResourceSharer{Float64}(
+        n_exposed_vars(p),
+        nvars(p),
+        (y,_,_) -> ForwardDiff.gradient(dual_objective(p, x(y)), y),
+        portmap(p).func
+    )
+end
+
+#=function gradient_flow(p::DualMaxProblem)
     function primal_grad_flow(λ)
         x -> -ForwardDiff.gradient(primal_objective(p,λ), x)
     end
@@ -232,7 +242,7 @@ function gradient_flow(p::DualMaxProblem)
             nlsolve(primal_grad_flow(λ), zeros(n_primal_vars(p))#=, xtol=.01=#).zero), λ),
         portmap(p).func
     )
-end
+end=#
 
 #=function gradient_flow(p::DualMaxProblem)
     function primal_grad_flow(λ)
@@ -257,7 +267,8 @@ gradient_flow(ps::Vector{AbstractProblem}) = map(p->gradient_flow(p), ps)
     return nlsolve(primal_grad_flow(λ), zeros(n_primal_vars(p))#=, xtol=.01=#)
 end=#
 
-function primal_solution(p::DualMaxProblem, λ)
+function primal_solution(p::DualMaxProblem, y)
+    return optimize(primal_objective(p,y), zeros(n_primal_vars(p)), NewtonTrustRegion(), autodiff=:forward).minimizer
 end
 
 end # module
