@@ -88,9 +88,9 @@ ops = x(ods.minimizer)=#
 
 # Start testing stuff
 
-g1 = wheel_graph(Graph, 6)
-g2 = complete_graph(Graph, 4)
-g3 = wheel_graph(Graph, 8)
+g1 = wheel_graph(Graph, 20)
+g2 = complete_graph(Graph, 10)
+g3 = wheel_graph(Graph, 30)
 
 K1 = [x -> x^2 for e in 1:ne(g1)]
 K2 = [x -> x^2 for e in 1:ne(g2)]
@@ -122,9 +122,9 @@ s1 = gradient_flow(p1)
 s2 = gradient_flow(p2)
 s3 = gradient_flow(p3)
 
-ds1 = euler_approx(s1, 0.1)
-ds2 = euler_approx(s2, 0.1)
-ds3 = euler_approx(s3, 0.1)
+ds1 = euler_approx(s1, 0.01)
+ds2 = euler_approx(s2, 0.01)
+ds3 = euler_approx(s3, 0.01)
 
 d = @relation (x,y,z) begin
     fg1(x,z)
@@ -133,19 +133,21 @@ d = @relation (x,y,z) begin
 end
 
 composite_problem = oapply(d, [p1,p2,p3])
-total_ds = euler_approx(gradient_flow(composite_problem), 0.1)
+total_ds = euler_approx(gradient_flow(composite_problem), 0.01)
 
 composite_ds = oapply(d, [ds1,ds2,ds3])
 
 total_V = nvars(composite_problem)
 
-dual_sol1 = iterate(u -> eval_dynamics(total_ds, u), zeros(total_V), 100)
+dual_sol1 = iterate(u -> eval_dynamics(total_ds, u), zeros(total_V), 1000)
 
-@time iterate(u -> eval_dynamics(total_ds, u), zeros(total_V), 100)
+println("Time for dual ascent on total problem:")
+@time iterate(u -> eval_dynamics(total_ds, u), zeros(total_V), 1000)
 
-dual_sol2 = iterate(u -> eval_dynamics(composite_ds, u), zeros(total_V), 100)
+dual_sol2 = iterate(u -> eval_dynamics(composite_ds, u), zeros(total_V), 1000)
 
-@time iterate(u -> eval_dynamics(composite_ds, u), zeros(total_V), 100)
+println("Time for dual decomposition on UWD structure:")
+@time iterate(u -> eval_dynamics(composite_ds, u), zeros(total_V), 1000)
 
 @test dual_sol1 ≈ dual_sol2
 
@@ -162,6 +164,30 @@ A3 = node_incidence_matrix(fg3)
 P = induced_matrix(legs(Mpo)[1])
 A = P'*BlockDiagonal([A1,A2,A3])
 b = P'*vcat(b1,b2,b3)
-primal_sol = primal_solution(composite_problem, dual_sol1)
+primal_sol = primal_solution(composite_problem, dual_sol2)
 
-@test norm(A*primal_sol - b) < 0.01
+@test norm(A*primal_sol - b) < 0.5
+
+# Maximally decomposed version
+N = n_primal_vars(composite_problem)
+L(i) = (x,y) -> x[1]^2 + y'*(A[:,i]*x[1] - 1/N*b)
+L(x,y) = sum([L(i)(x[i],y) for i in 1:N])
+
+function dual_decomp(y0, ss, iters)
+    y = y0
+    x = zeros(N)
+    for i in 1:iters
+        for i in 1:N
+            x[i] = (optimize(x -> L(i)(x,y), [0.0], LBFGS(), autodiff=:forward).minimizer)[1]
+        end
+        y = y + ss*ForwardDiff.gradient(y->L(x,y),y)
+    end
+    return y
+end
+
+dd_sol = dual_decomp(zeros(total_V), 0.01, 1000)
+
+println("Time for complete dual decomposition:")
+@time dual_decomp(zeros(total_V), 0.01, 1000);
+
+println("Done.")

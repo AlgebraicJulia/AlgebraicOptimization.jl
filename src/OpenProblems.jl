@@ -221,7 +221,7 @@ gradient_flow(p::MinimizationProblem, grad::Function #=Function × R^N->\R^N=#) 
 )
 
 function gradient_flow(p::DualMaxProblem)
-    x(y) = optimize(primal_objective(p,y), zeros(n_primal_vars(p)), NewtonTrustRegion(), autodiff=:forward).minimizer
+    x(y) = optimize(primal_objective(p,y), zeros(n_primal_vars(p)), LBFGS(), autodiff=:forward).minimizer
     return ContinuousResourceSharer{Float64}(
         n_exposed_vars(p),
         nvars(p),
@@ -268,7 +268,7 @@ gradient_flow(ps::Vector{AbstractProblem}) = map(p->gradient_flow(p), ps)
 end=#
 
 function primal_solution(p::DualMaxProblem, y)
-    return optimize(primal_objective(p,y), zeros(n_primal_vars(p)), NewtonTrustRegion(), autodiff=:forward).minimizer
+    return optimize(primal_objective(p,y), zeros(n_primal_vars(p)), LBFGS(), autodiff=:forward).minimizer
 end
 
 end # module
