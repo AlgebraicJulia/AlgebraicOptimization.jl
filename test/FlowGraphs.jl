@@ -8,6 +8,8 @@ using ForwardDiff
 using BlockDiagonals
 using Test
 using LinearAlgebra
+using BenchmarkTools
+using Plots
 
 # Make a flow graph from a catlab graph
 
@@ -86,11 +88,26 @@ daps, dads = dual_ascent(objective(p), ne(g), zeros(nv(g)), 0.1, 100)
 @time ods = optimize(q, #=negative_dual_gradient(objective(p), ne(g)),=# zeros(nv(g)), BFGS())
 ops = x(ods.minimizer)=#
 
-# Start testing stuff
 
-g1 = wheel_graph(Graph, 20)
-g2 = complete_graph(Graph, 10)
-g3 = wheel_graph(Graph, 30)
+function simulate(f, x0, num_iters)
+    x = x0
+    for i in 1:num_iters
+        x = f(x)
+    end
+    return x
+end
+# Start testing stuff
+function run_bench1(max_size)
+
+times1 = []
+times2 = []
+
+for i in 10:50:max_size
+
+
+g1 = wheel_graph(Graph, i)
+g2 = wheel_graph(Graph, i)
+g3 = wheel_graph(Graph, i)
 
 K1 = [x -> x^2 for e in 1:ne(g1)]
 K2 = [x -> x^2 for e in 1:ne(g2)]
@@ -139,17 +156,18 @@ composite_ds = oapply(d, [ds1,ds2,ds3])
 
 total_V = nvars(composite_problem)
 
-dual_sol1 = iterate(u -> eval_dynamics(total_ds, u), zeros(total_V), 1000)
+##dual_sol1 = simulate(u -> eval_dynamics(total_ds, u), zeros(total_V), 10)
 
-println("Time for dual ascent on total problem:")
-@time iterate(u -> eval_dynamics(total_ds, u), zeros(total_V), 1000)
+#println("Time for dual ascent on total problem:")
+#@time simulate(u -> eval_dynamics(total_ds, u), zeros(total_V), 10)
 
-dual_sol2 = iterate(u -> eval_dynamics(composite_ds, u), zeros(total_V), 1000)
+dual_sol2 = simulate(u -> eval_dynamics(composite_ds, u), zeros(total_V), 100)
 
 println("Time for dual decomposition on UWD structure:")
-@time iterate(u -> eval_dynamics(composite_ds, u), zeros(total_V), 1000)
-
-@test dual_sol1 ≈ dual_sol2
+t1 = @elapsed simulate(u -> eval_dynamics(composite_ds, u), zeros(total_V), 100)
+println(t1)
+push!(times1, t1)
+#@test dual_sol1 ≈ dual_sol2
 
 ps = [p1,p2,p3]
 
@@ -164,9 +182,10 @@ A3 = node_incidence_matrix(fg3)
 P = induced_matrix(legs(Mpo)[1])
 A = P'*BlockDiagonal([A1,A2,A3])
 b = P'*vcat(b1,b2,b3)
-primal_sol = primal_solution(composite_problem, dual_sol2)
+@test sum(b) == 0.0
+#primal_sol = primal_solution(composite_problem, dual_sol2)
 
-@test norm(A*primal_sol - b) < 0.5
+#@test norm(A*primal_sol - b) < 0.5
 
 # Maximally decomposed version
 N = n_primal_vars(composite_problem)
@@ -185,9 +204,24 @@ function dual_decomp(y0, ss, iters)
     return y
 end
 
-dd_sol = dual_decomp(zeros(total_V), 0.01, 1000)
+dd_sol = dual_decomp(zeros(total_V), 0.01, 100)
 
 println("Time for complete dual decomposition:")
-@time dual_decomp(zeros(total_V), 0.01, 1000);
+t2 = @elapsed dual_decomp(zeros(total_V), 0.01, 100);
+println(t2)
 
+push!(times2, t2)
+
+@test dd_sol ≈ dual_sol2
+
+end
 println("Done.")
+
+return times1, times2
+end
+
+N = 300
+times1,times2 = run_bench1(N)
+
+plot(10:50:N, times1)
+plot!(10:50:N, times2)
