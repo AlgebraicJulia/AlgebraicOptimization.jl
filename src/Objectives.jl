@@ -38,7 +38,7 @@ function oapply(d::AbstractUWD, Xs::Vector{Open{PrimalObjective}})
 end
 
 function gradient_flow(f::Open{PrimalObjective})
-    return OpenOptimizer(f.S, x -> -ForwardDiff.gradient(f.o, x), f.m)
+    return Open{Optimizer}(f.S, x -> -ForwardDiff.gradient(f.o, x), f.m)
 end
 
 

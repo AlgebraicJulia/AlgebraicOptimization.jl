@@ -50,26 +50,26 @@ end
 
 laxator(::DiscreteOpt, Xs::Vector{Optimizer}) = laxator(ContinuousOpt(), Xs)
 
-const OpenOptimizer = Open{Optimizer}
-Open{Optimizer}(S::FinSet, v::Function, m::FinFunction) = OpenOptimizer(S, Optimizer(S, v), m)
+#const OpenOptimizer = Open{Optimizer}
+Open{Optimizer}(S::FinSet, v::Function, m::FinFunction) = Open{Optimizer}(S, Optimizer(S, v), m)
 
 
-struct OpenContinuousOpt <: CospanAlgebra{OpenOptimizer} end # Turn Dynam into a UWD algebra in one line!
-struct OpenDiscreteOpt <: CospanAlgebra{OpenOptimizer} end
+struct OpenContinuousOpt <: CospanAlgebra{Open{Optimizer}} end # Turn Dynam into a UWD algebra in one line!
+struct OpenDiscreteOpt <: CospanAlgebra{Open{Optimizer}} end
 
-function oapply(C::OpenContinuousOpt, d::AbstractUWD, Xs::Vector{OpenOptimizer})
+function oapply(C::OpenContinuousOpt, d::AbstractUWD, Xs::Vector{Open{Optimizer}})
     return oapply(C, ContinuousOpt(), d, Xs)
 end
 
-function oapply(C::OpenDiscreteOpt, d::AbstractUWD, Xs::Vector{OpenOptimizer})
+function oapply(C::OpenDiscreteOpt, d::AbstractUWD, Xs::Vector{Open{Optimizer}})
     return oapply(C, DiscreteOpt(), d, Xs)
 end
 
-function Euler(f::OpenOptimizer, γ::Float64)
-    return OpenOptimizer(f.S, Optimizer(f.S, x->x+γ*f.o(x)), f.m)
+function Euler(f::Open{Optimizer}, γ::Float64)
+    return Open{Optimizer}(f.S, Optimizer(f.S, x->x+γ*f.o(x)), f.m)
 end
 
-function simulate(f::OpenOptimizer, x0::Vector{Float64}, tsteps::Int)
+function simulate(f::Open{Optimizer}, x0::Vector{Float64}, tsteps::Int)
     res = x0
     for i in 1:tsteps
         res = f.o(res)

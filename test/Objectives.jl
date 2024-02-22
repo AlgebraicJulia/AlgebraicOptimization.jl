@@ -1,5 +1,6 @@
 using AlgebraicOptimization.Objectives
 using AlgebraicOptimization.Optimizers
+using AlgebraicOptimization.FinSetAlgebras
 using Test
 using Catlab
 
@@ -35,5 +36,17 @@ o3 = gradient_flow(p3)
 
 composite_of_optimizers = oapply(OpenContinuousOpt(), d, [o1,o2,o3])
 
+dc1 = Euler(optimizer_of_composite, 0.1)
+dc2 = Euler(composite_of_optimizers, 0.1)
+
+x0 = repeat([100.0], length(composite_prob.S))
+tsteps = 1000
+r1 = simulate(dc1, x0, tsteps)
+r2 = simulate(dc2, x0, tsteps)
+
+println(r1)
+println(r2)
+
+@test r1 ≈ r2
 
 
