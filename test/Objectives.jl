@@ -22,9 +22,9 @@ a = rand(-1:0.01:1,5)
 b = rand(-1:0.01:1,3)
 c = rand(-1:0.01:1,4)
 
-p1 = Open{PrimalObjective}(FinSet(5), x->x'*P*x + a'*x, FinFunction([2,4], 5))
-p2 = Open{PrimalObjective}(FinSet(3), x->x'*Q*x + b'*x, id(FinSet(3)))
-p3 = Open{PrimalObjective}(FinSet(4), x->x'*R*x + c'*x, FinFunction([1,3,4]))
+p1 = Open{PrimalObjective}(FinSet(5), PrimalObjective(FinSet(5),x->x'*P*x + a'*x), FinFunction([2,4], 5))
+p2 = Open{PrimalObjective}(FinSet(3), PrimalObjective(FinSet(3),x->x'*Q*x + b'*x), id(FinSet(3)))
+p3 = Open{PrimalObjective}(FinSet(4), PrimalObjective(FinSet(4),x->x'*R*x + c'*x), FinFunction([1,3,4]))
 
 composite_prob = oapply(d, [p1,p2,p3])
 

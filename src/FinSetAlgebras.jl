@@ -85,10 +85,10 @@ portmap(obj::Open{T}) where T = obj.m
 
 
 function Open{T}(o::T) where T
-    Open{T}(dom(o), o, id(dom(o)))
+    Open{T}(domain(o), o, id(domain(o)))
 end
 
-dom(obj::Open{T}) where T = dom(obj.m)
+domain(obj::Open{T}) where T = domain(obj.m)
 
 function hom_map(::CospanAlgebra{Open{T}}, A::FinSetAlgebra{T}, ϕ::Cospan, X::Open{T})::Open{T} where T
     l = left(ϕ)
