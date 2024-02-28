@@ -213,6 +213,8 @@ println(t2)
 push!(times2, t2)
 
 @test dd_sol ≈ dual_sol2
+println(primal_solution(composite_problem, dd_sol))
+
 
 end
 println("Done.")
@@ -220,7 +222,7 @@ println("Done.")
 return times1, times2
 end
 
-N = 300
+N = 100
 times1,times2 = run_bench1(N)
 
 plot(10:50:N, times1)
