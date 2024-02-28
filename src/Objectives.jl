@@ -1,7 +1,7 @@
 module Objectives
 
 export PrimalObjective, MinObj, gradient_flow, 
-    SaddleObjective, DualComp, primal_solution
+    SaddleObjective, DualComp, primal_solution, dual_objective, primal_objective
 
 using ..FinSetAlgebras
 import ..FinSetAlgebras: hom_map, laxator
@@ -91,8 +91,16 @@ end
 function gradient_flow(of::Open{SaddleObjective})
     f = data(of)
     x(λ) = optimize(primal_objective(f,λ), 
-                    zeros(length(f.primal_space)),
+                    zeros(n_primal_vars(f)),
                     LBFGS(), autodiff=:forward).minimizer
+                    
+    #=x(λ) = begin
+        v = optimize(primal_objective(f,λ), 
+                    zeros(n_primal_vars(f)),
+                    LBFGS(), autodiff=:forward).minimizer
+        println(v)
+        return v
+    end=#
     return Open{Optimizer}(of.S, 
         λ -> ForwardDiff.gradient(dual_objective(f, x(λ)), λ), of.m)
 end

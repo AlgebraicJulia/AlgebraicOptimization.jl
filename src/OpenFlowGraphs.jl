@@ -1,7 +1,7 @@
 module OpenFlowGraphs
 
 export FlowGraph, underlying_graph, FG, OpenFG, to_problem,
-    node_incidence_matrix, dual_decomposition
+    node_incidence_matrix, dual_decomposition, nvertices, nedges
 
 using ..FinSetAlgebras
 import ..FinSetAlgebras: hom_map, laxator
@@ -87,8 +87,7 @@ function to_problem(og::Open{FlowGraph})
     m = og.m
     A = node_incidence_matrix(g)
     function obj(x,λ)
-        sum([g.edge_costs[i](x[i]) for i in 1:nedges(g)]) 
-        + λ'*(A*x-g.flows)
+        return sum([g.edge_costs[i](x[i]) for i in 1:nedges(g)]) + λ'*(A*x-g.flows)
     end
 
     return Open{SaddleObjective}(S, SaddleObjective(FinSet(nedges(g)), S, obj), m)
