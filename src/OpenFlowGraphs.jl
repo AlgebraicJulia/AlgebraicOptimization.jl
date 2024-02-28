@@ -1,7 +1,7 @@
 module OpenFlowGraphs
 
 export FlowGraph, underlying_graph, FG, OpenFG, to_problem,
-    node_incidence_matrix
+    node_incidence_matrix, dual_decomposition
 
 using ..FinSetAlgebras
 import ..FinSetAlgebras: hom_map, laxator
@@ -10,6 +10,8 @@ using ..Optimizers
 using Catlab
 import Catlab: oapply, dom, src, tgt
 using Test
+using Optim
+using ForwardDiff
 
 struct FlowGraph
     nodes::FinSet
@@ -90,6 +92,24 @@ function to_problem(og::Open{FlowGraph})
     end
 
     return Open{SaddleObjective}(S, SaddleObjective(FinSet(nedges(g)), S, obj), m)
+end
+
+function dual_decomposition(og::Open{FlowGraph}, γ)
+    g = data(og)
+    A = node_incidence_matrix(g)
+    N = nedges(g)
+    
+    L(i) = (x,λ) -> g.edge_costs[i](x[1]) + λ'*(A[:,i]*x[1] - 1/N*g.flows)
+    L(x,λ) = sum([L(i)(x[i], λ) for i in 1:N])
+
+    function dual_decomp_dynamics(λ)
+        x = zeros(N)
+        #=Threads.@threads=# for i in 1:N
+            x[i] = (optimize(x -> L(i)(x,λ), [0.0], LBFGS(), autodiff=:forward).minimizer)[1]
+        end
+        return λ + γ*ForwardDiff.gradient(λ->L(x,λ), λ)
+    end
+    return Open{Optimizer}(og.S, dual_decomp_dynamics, og.m)
 end
 
 end

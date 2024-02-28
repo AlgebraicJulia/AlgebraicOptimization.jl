@@ -1,7 +1,7 @@
 module Objectives
 
 export PrimalObjective, MinObj, gradient_flow, 
-    SaddleObjective, DualComp
+    SaddleObjective, DualComp, primal_solution
 
 using ..FinSetAlgebras
 import ..FinSetAlgebras: hom_map, laxator
@@ -53,12 +53,16 @@ end
 
 (p::SaddleObjective)(x,λ) = p.objective(x,λ)
 
+n_primal_vars(p::SaddleObjective) = length(p.primal_space)
 dom(p::SaddleObjective) = p.dual_space
 objective(p::SaddleObjective) = p.objective
 primal_objective(p::SaddleObjective, λ) = 
     x -> objective(p)(x,λ)
 dual_objective(p::SaddleObjective, x) = 
     λ -> objective(p)(x,λ) 
+
+primal_solution(p::SaddleObjective, λ) =
+    optimize(primal_objective(p,λ), zeros(n_primal_vars(p)), LBFGS(), autodiff=:forward).minimizer
 
 # finset algebra for composing along dual variables of saddle functions
 struct DualComp <: FinSetAlgebra{SaddleObjective} end

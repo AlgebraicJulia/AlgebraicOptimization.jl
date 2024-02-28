@@ -40,7 +40,7 @@ function laxator(::ContinuousOpt, Xs::Vector{Optimizer})
     subsystems = [x -> X(pullback_matrix(l)*x) for (X,l) in zip(Xs, legs(c))]
     function parallel_dynamics(x)
         res = Vector{Vector}(undef, length(Xs)) # Initialize storage for results
-        Threads.@threads for i = 1:length(Xs)
+        #=Threads.@threads=# for i = 1:length(Xs)
             res[i] = subsystems[i](x)
         end
         return vcat(res...)
