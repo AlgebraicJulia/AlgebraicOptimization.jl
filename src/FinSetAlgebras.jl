@@ -1,6 +1,6 @@
 module FinSetAlgebras
 
-export FinSetAlgebra, CospanAlgebra, Open, hom_map, laxator
+export FinSetAlgebra, CospanAlgebra, Open, hom_map, laxator, data, portmap
 
 using LinearAlgebra, SparseArrays
 using Catlab
@@ -88,7 +88,7 @@ function Open{T}(o::T) where T
     Open{T}(domain(o), o, id(domain(o)))
 end
 
-domain(obj::Open{T}) where T = domain(obj.m)
+dom(obj::Open{T}) where T = dom(obj.m)
 
 function hom_map(::CospanAlgebra{Open{T}}, A::FinSetAlgebra{T}, ϕ::Cospan, X::Open{T})::Open{T} where T
     l = left(ϕ)
