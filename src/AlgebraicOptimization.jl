@@ -3,5 +3,6 @@
 module AlgebraicOptimization
 
 include("OpenProblems.jl")
+include("FlowGraphs.jl")
 
 end
