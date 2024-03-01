@@ -7,6 +7,7 @@ using Random
 using StatsBase
 using Test
 using Plots
+theme(:ggplot2)
 
 d = @relation (x,y,z) begin
     f(w,x)
@@ -126,7 +127,9 @@ res2 = @time simulate(comp_opt2, zeros(length(comp_opt2.S)), iters)
 
 function graph_size_benchmark(d, node_sizes, connectivity, ss, iters)
     dd_times = []
+    dd_mem = []
     hdd_times = []
+    hdd_mem = []
     for N in node_sizes
         gs = [random_open_flowgraph(N, connectivity, length(ports(d, i))) for i in 1:nboxes(d)]
         g_comp = oapply(d, gs)
@@ -137,15 +140,23 @@ function graph_size_benchmark(d, node_sizes, connectivity, ss, iters)
         res1 = simulate(dd_optimizer, λ0, iters)
         res2 = simulate(hdd_optimizer, λ0,iters)
         @test res1 ≈ res2
-        push!(dd_times, @elapsed simulate(dd_optimizer, λ0, iters))
-        push!(hdd_times, @elapsed simulate(hdd_optimizer, λ0, iters))
+        t1 = @timed simulate(dd_optimizer, λ0, iters)
+        t2 = @timed simulate(hdd_optimizer, λ0, iters)
+        push!(dd_times, t1[2])
+        push!(dd_mem, t1[3])
+        push!(hdd_times, t2[2])
+        push!(hdd_mem, t2[3])
+        #push!(dd_times, @elapsed simulate(dd_optimizer, λ0, iters))
+        #push!(hdd_times, @elapsed simulate(hdd_optimizer, λ0, iters))
     end
-    return dd_times, hdd_times
+    return dd_times, hdd_times, dd_mem ./ (1024^3), hdd_mem ./ (1024^3)
 end
 
 function graph_connectivity_benchmark(d, num_nodes, connectivities, ss, iters)
     dd_times = []
+    dd_mem = []
     hdd_times = []
+    hdd_mem = []
     for p in connectivities
         gs = [random_open_flowgraph(num_nodes, p, length(ports(d, i))) for i in 1:nboxes(d)]
         g_comp = oapply(d, gs)
@@ -156,23 +167,113 @@ function graph_connectivity_benchmark(d, num_nodes, connectivities, ss, iters)
         res1 = simulate(dd_optimizer, λ0, iters)
         res2 = simulate(hdd_optimizer, λ0,iters)
         @test res1 ≈ res2
-        push!(dd_times, @elapsed simulate(dd_optimizer, λ0, iters))
-        push!(hdd_times, @elapsed simulate(hdd_optimizer, λ0, iters))
+
+        t1 = @timed simulate(dd_optimizer, λ0, iters)
+        t2 = @timed simulate(hdd_optimizer, λ0, iters)
+        push!(dd_times, t1[2])
+        push!(dd_mem, t1[3])
+        push!(hdd_times, t2[2])
+        push!(hdd_mem, t2[3])
+        #push!(dd_times, @elapsed simulate(dd_optimizer, λ0, iters))
+        #push!(hdd_times, @elapsed simulate(hdd_optimizer, λ0, iters))
     end
-    return dd_times, hdd_times
+    return dd_times, hdd_times, dd_mem ./ (1024^3), hdd_mem ./ (1024^3)
 end
 
-nodes_sizes = 10:10:100
+f = "Computer Modern"
+node_sizes = 10:10:120
+#node_sizes = 10:5:30
 connectivity = .2
 ss = 0.01
 iters = 10
-#dd_ts, hdd_ts = graph_size_benchmark(d, nodes_sizes, connectivity, ss, iters)
-#plot(nodes_sizes, dd_ts, label="Flat Dual Decomp")
-#plot!(nodes_sizes, hdd_ts, label="Hierarchical Dual Decomp")
+dd_ts, hdd_ts, dd_mem, hdd_mem = graph_size_benchmark(d, node_sizes, connectivity, ss, iters)
+p1 = plot(node_sizes, dd_ts, label="Standard DD",
+    size = (1000,800),
+    title="Performance vs. Graph Size",
+    titlefont = (14,f),
+    linewidth = 2,
+    xlabel="Number of nodes per subgraph",
+    ylabel ="Execution time (s)",
+    thickness_scaling = 2,
+    tickfont = (10,f),
+    legend = :topleft,
+    legend_font_family = f,
+    #smooth = true,
+    legendfontsize=10,
+    seriescolor=palette(:default)[1],
+    ms=4,
+    guidefont=(f,12)
+)
+plot!(node_sizes, hdd_ts, label="Hierarchical DD", linewidth=2, seriescolor=palette(:default)[2])
+p3 = plot(node_sizes, dd_mem, label="Standard DD",
+    size = (1000,800),
+    title="Memory Usage vs. Graph Size",
+    titlefont = (14,f),
+    linewidth = 2,
+    xlabel="Number of nodes per subgraph",
+    ylabel ="Memory used (GiB)",
+    thickness_scaling = 2,
+    tickfont = (10,f),
+    legend = :topleft,
+    legend_font_family = f,
+    #smooth = true,
+    legendfontsize=10,
+    seriescolor=palette(:default)[1],
+    ms=4,
+    guidefont=(f,12)
+)
+plot!(node_sizes, hdd_mem, label="Hierarchical DD", linewidth=2, seriescolor=palette(:default)[2])
 
-num_nodes = 60
+
+
+
+
+#num_nodes = 60
+num_nodes = 70
 connectivities = 0.1:0.1:1.0
 
-dd_ts, hdd_ts = graph_connectivity_benchmark(d, num_nodes, connectivities, ss, iters)
-plot(connectivities, dd_ts, label="Flat Dual Decomp")
-plot!(connectivities, hdd_ts, label="Hierarchical Dual Decomp")
+dd_ts, hdd_ts, dd_mem, hdd_mem = graph_connectivity_benchmark(d, num_nodes, connectivities, ss, iters)
+p2 = plot(connectivities, dd_ts, label="Standard DD",
+    size = (1000,800),
+    title="Performance vs. Graph Connectivity",
+    titlefont = (14,f),
+    linewidth = 2,
+    xlabel="Connectivity factor per subgraph",
+    ylabel ="Execution time (s)",
+    thickness_scaling = 2,
+    tickfont = (10,f),
+    legend = :topleft,
+    legend_font_family = f,
+    #smooth = true,
+    legendfontsize=10,
+    seriescolor=palette(:default)[1],
+    ms=4,
+    guidefont=(f,12)
+)
+plot!(connectivities, hdd_ts, label="Hierarchical DD",linewidth=2, seriescolor=palette(:default)[2])
+
+p4 = plot(connectivities, dd_mem, label="Standard DD",
+    size = (1000,800),
+    title="Memory Usage vs. Graph Connectivity",
+    titlefont = (14,f),
+    linewidth = 2,
+    xlabel="Connectivity factor per subgraph",
+    ylabel ="Memory used (GiB)",
+    thickness_scaling = 2,
+    tickfont = (10,f),
+    legend = :topleft,
+    legend_font_family = f,
+    #smooth = true,
+    legendfontsize=10,
+    seriescolor=palette(:default)[1],
+    ms=4,
+    guidefont=(f,12)
+)
+plot!(connectivities, hdd_mem, label="Hierarchical DD",linewidth=2, seriescolor=palette(:default)[2])
+
+##### Nice Benchmark Plots #####
+
+l = @layout [a b; c d]
+plot(p1,p2,p3,p4, layout=l, size=(2200,1600))
+
+
