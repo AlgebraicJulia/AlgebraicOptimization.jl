@@ -2,6 +2,11 @@
 """
 module AlgebraicOptimization
 
-include("OpenProblems.jl")
+include("FinSetAlgebras.jl")
+include("Optimizers.jl")
+include("Objectives.jl")
+include("OpenFlowGraphs.jl")
+#include("OpenProblems.jl")
+#include("FlowGraphs.jl")
 
 end
