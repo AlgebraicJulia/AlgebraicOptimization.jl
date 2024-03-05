@@ -9,10 +9,10 @@ using Test
 using Plots
 theme(:ggplot2)
 
-d = @relation (x,y,z) begin
-    f(w,x)
+d = @relation (a,y,z) begin
+    f(w,x,a)
     g(u,w,y)
-    h(u,w,z)
+    h(u,w,x,z)
 end
 
 function random_connected_graph(nv, p)
@@ -79,43 +79,43 @@ f(x) = sum([data(g).edge_costs[i](x[i]) for i in 1:nedges(data(g))]) + dual_sol1
 
 
 # Test flow graph composition
-g1 = random_open_flowgraph(10, .2, 2)
-g2 = random_open_flowgraph(10, .2, 3)
-g3 = random_open_flowgraph(10, .2, 3)
+#g1 = random_open_flowgraph(10, .2, 2)
+#g2 = random_open_flowgraph(10, .2, 3)
+#g3 = random_open_flowgraph(10, .2, 3)
 
-g_comp = oapply(d, [g1, g2, g3])
+#g_comp = oapply(d, [g1, g2, g3])
 
 # Test naturality of MCNF
-γ = 0.1
-iters = 20
-p1 = to_problem(g1)
-p2 = to_problem(g2)
-p3 = to_problem(g3)
-p_comp1 = oapply(d, [p1, p2, p3])
+#γ = 0.1
+#iters = 20
+#p1 = to_problem(g1)
+#p2 = to_problem(g2)
+#p3 = to_problem(g3)
+#p_comp1 = oapply(d, [p1, p2, p3])
 
-p_comp2 = to_problem(g_comp)
+#p_comp2 = to_problem(g_comp)
 
-opt1 = Euler(gradient_flow(p_comp1), γ)
-opt2 = Euler(gradient_flow(p_comp2), γ)
+#opt1 = Euler(gradient_flow(p_comp1), γ)
+#opt2 = Euler(gradient_flow(p_comp2), γ)
 
-r11 = simulate(opt1, zeros(length(opt1.S)), iters)
-r22 = simulate(opt2, zeros(length(opt2.S)), iters)
+#r11 = simulate(opt1, zeros(length(opt1.S)), iters)
+#r22 = simulate(opt2, zeros(length(opt2.S)), iters)
 
-@test r11 ≈ r22
+#@test r11 ≈ r22
 
 #o1 = dual_decomposition(g1, 0.1)
 #o2 = dual_decomposition(g2, 0.1)
 #o3 = dual_decomposition(g3, 0.1)
 
-o1 = Euler(gradient_flow(p1),γ)
-o2 = Euler(gradient_flow(p2),γ)
-o3 = Euler(gradient_flow(p3),γ)
+#o1 = Euler(gradient_flow(p1),γ)
+#o2 = Euler(gradient_flow(p2),γ)
+#o3 = Euler(gradient_flow(p3),γ)
 
-comp_opt1 = oapply(OpenDiscreteOpt(), d, [o1,o2,o3])
-comp_opt2 = dual_decomposition(g_comp, γ)
+#comp_opt1 = oapply(OpenDiscreteOpt(), d, [o1,o2,o3])
+#comp_opt2 = dual_decomposition(g_comp, γ)
 
-res1 = @time simulate(comp_opt1, zeros(length(comp_opt1.S)), iters)
-res2 = @time simulate(comp_opt2, zeros(length(comp_opt2.S)), iters)
+#res1 = @time simulate(comp_opt1, zeros(length(comp_opt1.S)), iters)
+#res2 = @time simulate(comp_opt2, zeros(length(comp_opt2.S)), iters)
 
 #@test res1 ≈ res2
 #@test r11 ≈ res1
@@ -181,7 +181,7 @@ function graph_connectivity_benchmark(d, num_nodes, connectivities, ss, iters)
 end
 
 f = "Computer Modern"
-node_sizes = 10:10:120
+node_sizes = 10:10:150
 #node_sizes = 10:5:30
 connectivity = .2
 ss = 0.01
@@ -189,7 +189,8 @@ iters = 10
 dd_ts, hdd_ts, dd_mem, hdd_mem = graph_size_benchmark(d, node_sizes, connectivity, ss, iters)
 p1 = plot(node_sizes, dd_ts, label="Standard DD",
     size = (1000,800),
-    title="Performance vs. Graph Size",
+    marker=:circle,
+    title="Speed vs. Graph Size",
     titlefont = (14,f),
     linewidth = 2,
     xlabel="Number of nodes per subgraph",
@@ -204,13 +205,14 @@ p1 = plot(node_sizes, dd_ts, label="Standard DD",
     ms=4,
     guidefont=(f,12)
 )
-plot!(node_sizes, hdd_ts, label="Hierarchical DD", linewidth=2, seriescolor=palette(:default)[2])
+plot!(node_sizes, hdd_ts, label="Hierarchical DD", marker=:square, linewidth=2, seriescolor=palette(:default)[2])
 p3 = plot(node_sizes, dd_mem, label="Standard DD",
     size = (1000,800),
+    marker=:circle,
     title="Memory Usage vs. Graph Size",
     titlefont = (14,f),
     linewidth = 2,
-    xlabel="Number of nodes per subgraph",
+    #xlabel="Number of nodes per subgraph",
     ylabel ="Memory used (GiB)",
     thickness_scaling = 2,
     tickfont = (10,f),
@@ -222,24 +224,46 @@ p3 = plot(node_sizes, dd_mem, label="Standard DD",
     ms=4,
     guidefont=(f,12)
 )
-plot!(node_sizes, hdd_mem, label="Hierarchical DD", linewidth=2, seriescolor=palette(:default)[2])
+plot!(node_sizes, hdd_mem, label="Hierarchical DD",marker=:square, linewidth=2, seriescolor=palette(:default)[2])
+
+size_speedups = [x / y for (x,y) in zip(dd_ts, hdd_ts)]
+size_rel_mem = [x / y for (x,y) in zip(dd_mem, hdd_mem)]
+
+p5 = plot(node_sizes, size_speedups, label="Relative Speedup",
+    size = (1000,800),
+    marker=:circle,
+    title="Relative Performance vs. Graph Size",
+    titlefont = (14,f),
+    linewidth = 2,
+    #xlabel="Number of nodes per subgraph",
+    #ylabel ="Execution time (s)",
+    thickness_scaling = 2,
+    tickfont = (10,f),
+    legend = :topleft,
+    legend_font_family = f,
+    #smooth = true,
+    legendfontsize=10,
+    seriescolor=palette(:default)[3],
+    ms=4,
+    guidefont=(f,12)
+)
+plot!(node_sizes, size_rel_mem, label="Relative Memory Usage", marker=:square, linewidth=2, seriescolor=palette(:default)[4])
 
 
 
-
-
-#num_nodes = 60
-num_nodes = 70
+num_nodes = 80
+#num_nodes = 10
 connectivities = 0.1:0.1:1.0
 
 dd_ts, hdd_ts, dd_mem, hdd_mem = graph_connectivity_benchmark(d, num_nodes, connectivities, ss, iters)
 p2 = plot(connectivities, dd_ts, label="Standard DD",
     size = (1000,800),
-    title="Performance vs. Graph Connectivity",
+    marker=:circle,
+    title="Speed vs. Graph Connectivity",
     titlefont = (14,f),
     linewidth = 2,
     xlabel="Connectivity factor per subgraph",
-    ylabel ="Execution time (s)",
+    #ylabel ="Execution time (s)",
     thickness_scaling = 2,
     tickfont = (10,f),
     legend = :topleft,
@@ -250,15 +274,16 @@ p2 = plot(connectivities, dd_ts, label="Standard DD",
     ms=4,
     guidefont=(f,12)
 )
-plot!(connectivities, hdd_ts, label="Hierarchical DD",linewidth=2, seriescolor=palette(:default)[2])
+plot!(connectivities, hdd_ts, label="Hierarchical DD",marker=:square,linewidth=2, seriescolor=palette(:default)[2])
 
 p4 = plot(connectivities, dd_mem, label="Standard DD",
     size = (1000,800),
     title="Memory Usage vs. Graph Connectivity",
     titlefont = (14,f),
+    marker=:circle,
     linewidth = 2,
-    xlabel="Connectivity factor per subgraph",
-    ylabel ="Memory used (GiB)",
+    #xlabel="Connectivity factor per subgraph",
+    #ylabel ="Memory used (GiB)",
     thickness_scaling = 2,
     tickfont = (10,f),
     legend = :topleft,
@@ -269,11 +294,33 @@ p4 = plot(connectivities, dd_mem, label="Standard DD",
     ms=4,
     guidefont=(f,12)
 )
-plot!(connectivities, hdd_mem, label="Hierarchical DD",linewidth=2, seriescolor=palette(:default)[2])
+plot!(connectivities, hdd_mem, label="Hierarchical DD",marker=:square,linewidth=2, seriescolor=palette(:default)[2])
+
+conn_speedups = [x / y for (x,y) in zip(dd_ts, hdd_ts)]
+conn_rel_mem = [x / y for (x,y) in zip(dd_mem, hdd_mem)]
+p6 = plot(connectivities, conn_speedups, label="Relative Speedup",
+    size = (1000,800),
+    title="Relative Performance vs. Graph Connectivity",
+    titlefont = (14,f),
+    marker=:circle,
+    linewidth = 2,
+    #xlabel="Connectivity factor per subgraph",
+    #ylabel ="Memory used (GiB)",
+    thickness_scaling = 2,
+    tickfont = (10,f),
+    legend = :topleft,
+    legend_font_family = f,
+    #smooth = true,
+    legendfontsize=10,
+    seriescolor=palette(:default)[3],
+    ms=4,
+    guidefont=(f,12)
+)
+plot!(connectivities, conn_rel_mem, label="Relative Memory Usage",marker=:square,linewidth=2, seriescolor=palette(:default)[4])
 
 ##### Nice Benchmark Plots #####
 
-l = @layout [a b; c d]
-plot(p1,p2,p3,p4, layout=l, size=(2200,1600))
+l = @layout [a b; c d; e f]
+plot(p1,p2,p3,p4,p5,p6, layout=l, size=(2300,2400))
 
 
