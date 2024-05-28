@@ -181,8 +181,8 @@ function graph_connectivity_benchmark(d, num_nodes, connectivities, ss, iters)
 end
 
 f = "Computer Modern"
-node_sizes = 10:10:150
-#node_sizes = 10:5:30
+#node_sizes = 10:10:150
+node_sizes = 10:5:30
 connectivity = .2
 ss = 0.01
 iters = 10
@@ -251,8 +251,8 @@ plot!(node_sizes, size_rel_mem, label="Relative Memory Usage", marker=:square, l
 
 
 
-num_nodes = 80
-#num_nodes = 10
+#num_nodes = 80
+num_nodes = 10
 connectivities = 0.1:0.1:1.0
 
 dd_ts, hdd_ts, dd_mem, hdd_mem = graph_connectivity_benchmark(d, num_nodes, connectivities, ss, iters)

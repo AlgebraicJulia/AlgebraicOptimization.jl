@@ -1,3 +1,5 @@
+# A module for turning FinSet-algebras into Cospan-algebras
+# TODO: upstream into Catlab.jl
 module FinSetAlgebras
 
 export FinSetAlgebra, CospanAlgebra, Open, hom_map, laxator, data, portmap
@@ -6,57 +8,49 @@ using LinearAlgebra, SparseArrays
 using Catlab
 import Catlab: oapply, dom, Cospan
 
-#abstract type AlgebraObject end
+"""     FinSetAlgebra{T}
 
-abstract type FinSetAlgebra{T} end # A finset algebra with object type T
+A finset algebra is a lax symmetric monoidal functor (FinSet,+) → (Set,×).
+We implicitly use the category of Julia types and (pure) functions as a model of Set,
+so T is the type of objects mapped to by the algebra. Finset algebras must then implement
+the hom_map and laxator methods.
 
-#=function dom(X::T)::FinSet where T <: AlgebraObject
-    error("Domain not specified.")
-end=#
+T must implement dom(x::T)::FinSet, which implicitly defines the object map of a finset-algebra.
+"""
+abstract type FinSetAlgebra{T} end
 
-#=function ob_map(::FinSetAlgebra{T}, N::FinSet)::T where T <: AlgebraObject
-    error("Object map not implemented.")
-end=#
+"""     hom_map(::FinSetAlgebra{T}, ϕ::FinFunction, X::T)::T where T
 
+Overload to implement the action of a finset-algebra on morphisms.
+"""
 function hom_map(::FinSetAlgebra{T}, ϕ::FinFunction, X::T)::T where T
     error("Morphism map not implemented.")
 end
 
+"""     laxator(::FinSetAlgebra{T}, Xs::Vector{T})::T where T
+
+Overload to implement the product comparison (aka laxator) of a finset algebra.
+"""
 function laxator(::FinSetAlgebra{T}, Xs::Vector{T})::T where T
     error("Laxator not implemented.")
 end
 
+"""     oapply(A::FinSetAlgebra{T}, ϕ::FinFunction, Xs::Vector{T})::T where T
+
+Implements operadic composition for a given finset-algebra implementation.
+"""
 function oapply(A::FinSetAlgebra{T}, ϕ::FinFunction, Xs::Vector{T})::T where T
     return hom_map(A, ϕ, laxator(A, Xs))
 end
 
-# Example
-function pullback_matrix(f::FinFunction)
-    n = length(dom(f))
-    sparse(1:n, f.(dom(f)), ones(Int,n), dom(f).n, codom(f).n)
-end
+# UWD-algebras (aka Cospan-algebras) from finset-algebras
+#########################################################
 
-pushforward_matrix(f::FinFunction) = pullback_matrix(f)'
+"""     CospanAlgebra{T}
 
-#=struct FreeVector <: AlgebraObject
-    dim::FinSet
-    v::Vector{Float64}
-end=#
-
-#dom(v::FreeVector) = v.dim
-
-struct Pushforward <: FinSetAlgebra{Vector{Float64}} end
-
-dom(v::Vector{Float64}) = FinSet(length(v))
-
-hom_map(::Pushforward, ϕ::FinFunction, v::Vector{Float64}) = pushforward_matrix(ϕ)*v
-
-
-laxator(::Pushforward, Xs::Vector{Vector{Float64}}) = vcat(Xs...)
-
-# UWD algebras from finset algebras
+A cospan-algebra is a lax symmetric monoidal functor (Cospan(FinSet),+) → (Set,×).
+"""
 abstract type CospanAlgebra{T} end
-#abstract type SimpleCospanAlgebra{T, A<:FinSetAlgebra{T}} <: CospanAlgebra{T} end
 
 function hom_map(::CospanAlgebra{T}, ϕ::Cospan, X::T)::T where T
     error("Morphism map not implemented.")
@@ -66,12 +60,16 @@ function laxator(::CospanAlgebra{T}, Xs::Vector{T})::T where T
     error("Laxator not implemented.")
 end
 
-
 function oapply(A::CospanAlgebra{T}, ϕ::Cospan, Xs::Vector{T})::T where T
     return hom_map(A, ϕ, laxator(A, Xs))
 end
 
+"""     Open{T}
 
+Given a type T which implements finset-algebra, Open{T} implements cospan-algebra.
+o::T is an object, S is the domain of o, and m : dom(m) → S specifies which parts of
+S are open for composition.
+"""
 struct Open{T}
     S::FinSet
     o::T
@@ -80,16 +78,18 @@ struct Open{T}
         S != codom(m) || dom(o) != S ? error("Invalid portmap.") : new(S, o, m)
 end
 
+# Getters for Open{T}
 data(obj::Open{T}) where T = obj.o
 portmap(obj::Open{T}) where T = obj.m
 
-
+# Helper function for when m is identity.
 function Open{T}(o::T) where T
     Open{T}(domain(o), o, id(domain(o)))
 end
 
 dom(obj::Open{T}) where T = dom(obj.m)
 
+# Implement the hom_map for a cospan-algebra based on the hom map for a finset-algebra.
 function hom_map(::CospanAlgebra{Open{T}}, A::FinSetAlgebra{T}, ϕ::Cospan, X::Open{T})::Open{T} where T
     l = left(ϕ)
     r = right(ϕ)
@@ -99,6 +99,7 @@ function hom_map(::CospanAlgebra{Open{T}}, A::FinSetAlgebra{T}, ϕ::Cospan, X::O
     return Open{T}(apex(p), hom_map(A, pL, X.o), compose(r,pR))
 end
 
+# Implement the laxator for a cospan-algebra based on the laxator of a finset-algebra.
 function laxator(::CospanAlgebra{Open{T}}, A::FinSetAlgebra{T}, Xs::Vector{Open{T}})::Open{T} where T
     S = coproduct([X.S for X in Xs])
     inclusions(i::Int) = legs(S)[i]
@@ -111,20 +112,21 @@ function oapply(CA::CospanAlgebra{Open{T}}, FA::FinSetAlgebra{T}, ϕ::Cospan, Xs
     return hom_map(CA, FA, ϕ, laxator(CA, FA, Xs))
 end
 
+"""     uwd_to_cospan(d::AbstractUWD)
+
+Returns the underlying cospan representation of a given UWD.
+"""
 function uwd_to_cospan(d::AbstractUWD)
     # Build the left leg
     left_dom = vcat([length(ports(d, i)) for i in boxes(d)])
     left_codom = njunctions(d)
 
-    #println(cp_dom)
     ports_to_junctions = FinFunction[]
     total_portmap = subpart(d, :junction)
 
     for box in ports.([d], boxes(d))
         push!(ports_to_junctions, FinFunction([total_portmap[p] for p in box], length(box), left_codom))
     end
-    #println(ports_to_junctions)
-    #cp = CompositionPattern(cp_dom, cp_codom, ports_to_junctions)
 
     left = copair(ports_to_junctions)
     right = FinFunction(subpart(d, :outer_junction), left_codom)
@@ -136,79 +138,4 @@ function oapply(CA::CospanAlgebra{Open{T}}, FA::FinSetAlgebra{T}, d::AbstractUWD
     return oapply(CA, FA, uwd_to_cospan(d), Xs)
 end
 
-
 end
-#=
-# Test example
-struct UWDPushforward <: CospanAlgebra{Open{Vector{Float64}}} end
-
-const OpenVector = Open{Vector{Float64}}
-
-# UWD Interop
-function uwd_to_cospan(d::AbstractUWD)
-    # Build the left leg
-    left_dom = vcat([length(ports(d, i)) for i in boxes(d)])
-    left_codom = njunctions(d)
-
-    #println(cp_dom)
-    ports_to_junctions = FinFunction[]
-    total_portmap = subpart(d, :junction)
-
-    for box in ports.([d], boxes(d))
-        push!(ports_to_junctions, FinFunction([total_portmap[p] for p in box], length(box), left_codom))
-    end
-    #println(ports_to_junctions)
-    #cp = CompositionPattern(cp_dom, cp_codom, ports_to_junctions)
-
-    left = copair(ports_to_junctions)
-    right = FinFunction(subpart(d, :outer_junction), left_codom)
-    
-    return Cospan(left, right)  
-end
-
-function oapply(CA::CospanAlgebra{Open{T}}, FA::FinSetAlgebra{T}, d::AbstractUWD, Xs::Vector{Open{T}})::Open{T} where T
-    return oapply(CA, FA, uwd_to_cospan(d), Xs)
-end
-
-# AlgebraicDynamics
-struct System
-    state_space::FinSet
-    dynamics::Function # R^ss -> R^ss
-end
-(s::System)(x::Vector) = s.dynamics(x)
-dom(s::System) = s.state_space
-
-struct Dynam <: FinSetAlgebra{System} end
-
-hom_map(::Dynam, ϕ::FinFunction, s::System) = 
-    System(codom(ϕ), x->pushforward_matrix(ϕ)*s(pullback_matrix(ϕ)*x))
-
-function laxator(::Dynam, Xs::Vector{System})
-    c = coproduct([dom(X) for X in Xs])
-    subsystems = [x -> X(pullback_matrix(l)*x) for (X,l) in zip(Xs, legs(c))]
-    function parallel_dynamics(x)
-        res = Vector{Vector}(undef, length(Xs)) # Initialize storage for results
-        Threads.@threads for i = 1:length(Xs)
-            res[i] = subsystems[i](x)
-        end
-        return vcat(res...)
-    end
-    return System(apex(c), parallel_dynamics)
-end
-
-struct UWDDynam <: CospanAlgebra{Open{System}} end # Turn Dynam into a UWD algebra in one line!
-
-A = rand(-1.0:.01:1.0, 5,5)
-B = rand(-1.0:.01:1.0, 3,3)
-C = rand(-1.0:.01:1.0, 4,4)
-
-γ = 0.1
-s1 = System(FinSet(5), x->x +γ*A*x)
-s2 = System(FinSet(3), x->x + γ*B*x)
-s3 = System(FinSet(4), x->x + γ*C*x)
-
-ϕ = FinFunction([1,2,3,4,5,2,3,6,3,6,7,8])
-
-s = oapply(Dynam(), ϕ, [s1,s2,s3])=#
-
-#end

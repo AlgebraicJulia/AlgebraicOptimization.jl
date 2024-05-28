@@ -12,6 +12,8 @@ using ForwardDiff
 using Optim
 
 # Primal Minimization Problems and Gradient Descent
+###################################################
+
 struct PrimalObjective
     decision_space::FinSet
     objective::Function # R^ds -> R NOTE: should be autodifferentiable
@@ -45,6 +47,8 @@ function gradient_flow(f::Open{PrimalObjective})
 end
 
 # Saddle Problems and Dual Ascent
+#################################
+
 struct SaddleObjective
     primal_space::FinSet
     dual_space::FinSet
@@ -93,14 +97,6 @@ function gradient_flow(of::Open{SaddleObjective})
     x(λ) = optimize(primal_objective(f,λ), 
                     zeros(n_primal_vars(f)),
                     LBFGS(), autodiff=:forward).minimizer
-                    
-    #=x(λ) = begin
-        v = optimize(primal_objective(f,λ), 
-                    zeros(n_primal_vars(f)),
-                    LBFGS(), autodiff=:forward).minimizer
-        println(v)
-        return v
-    end=#
     return Open{Optimizer}(of.S, 
         λ -> ForwardDiff.gradient(dual_objective(f, x(λ)), λ), of.m)
 end
