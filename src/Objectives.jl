@@ -14,6 +14,12 @@ using Optim
 # Primal Minimization Problems and Gradient Descent
 ###################################################
 
+""" PrimalObjective
+
+An objective defining a minimization problems.
+These consist of a finset representing the decision variables and a cost function
+on the decision space. Note the cost function should be autodifferentiable by ForwardDiff.jl.
+"""
 struct PrimalObjective
     decision_space::FinSet
     objective::Function # R^ds -> R NOTE: should be autodifferentiable
@@ -21,11 +27,23 @@ end
 (p::PrimalObjective)(x::Vector) = p.objective(x)
 dom(p::PrimalObjective) = p.decision_space
 
+"""     MinObj
+
+Finset-algebra implementing composition of minimization problems by variable sharing.
+"""
 struct MinObj <: FinSetAlgebra{PrimalObjective} end
 
+"""     hom_map(::MinObj, ϕ::FinFunction, p::PrimalObjective)
+
+The morphism map is defined by ϕ ↦ (f ↦ f∘ϕ^*).
+"""
 hom_map(::MinObj, ϕ::FinFunction, p::PrimalObjective) = 
     PrimalObjective(codom(ϕ), x->p(pullback_matrix(ϕ)*x))
 
+"""     laxator(::MinObj, Xs::Vector{PrimalObjective})
+
+Takes the "disjoint union" of a collection of primal objectives.
+"""
 function laxator(::MinObj, Xs::Vector{PrimalObjective})
     c = coproduct([dom(X) for X in Xs])
     subproblems = [x -> X(pullback_matrix(l)*x) for (X,l) in zip(Xs, legs(c))]
@@ -42,6 +60,10 @@ function oapply(d::AbstractUWD, Xs::Vector{Open{PrimalObjective}})
     return oapply(OpenMinObj(), MinObj(), d, Xs)
 end
 
+"""     gradient_flow(f::Open{PrimalObjective})
+
+Returns the gradient flow optimizer of a given primal objective.
+"""
 function gradient_flow(f::Open{PrimalObjective})
     return Open{Optimizer}(f.S, x -> -ForwardDiff.gradient(f.o, x), f.m)
 end
