@@ -1,6 +1,4 @@
-using AlgebraicOptimization.Objectives
-using AlgebraicOptimization.Optimizers
-using AlgebraicOptimization.FinSetAlgebras
+using AlgebraicOptimization
 using Test
 using Catlab
 
@@ -44,8 +42,8 @@ tsteps = 1000
 r1 = simulate(dc1, x0, tsteps)
 r2 = simulate(dc2, x0, tsteps)
 
-println(r1)
-println(r2)
+#println(r1)
+#println(r2)
 
 @test r1 ≈ r2
 

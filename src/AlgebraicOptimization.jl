@@ -1,12 +1,15 @@
-""" Some description of ths package
-"""
 module AlgebraicOptimization
+
+using Reexport
 
 include("FinSetAlgebras.jl")
 include("Optimizers.jl")
 include("Objectives.jl")
 include("OpenFlowGraphs.jl")
-#include("OpenProblems.jl")
-#include("FlowGraphs.jl")
+
+@reexport using .FinSetAlgebras
+@reexport using .Optimizers
+@reexport using .Objectives
+@reexport using .OpenFlowGraphs
 
 end

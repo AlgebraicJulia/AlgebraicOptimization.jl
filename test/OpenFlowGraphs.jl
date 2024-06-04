@@ -1,8 +1,5 @@
 using Test
-using AlgebraicOptimization.FinSetAlgebras
-using AlgebraicOptimization.OpenFlowGraphs
-using AlgebraicOptimization.Objectives
-using AlgebraicOptimization.Optimizers
+using AlgebraicOptimization
 
 
 
@@ -59,8 +56,8 @@ o3 = Euler(gradient_flow(p3),γ)
 comp_opt1 = oapply(OpenDiscreteOpt(), d, [o1,o2,o3])
 comp_opt2 = dual_decomposition(g_comp, γ)
 
-res1 = @time simulate(comp_opt1, zeros(length(comp_opt1.S)), iters)
-res2 = @time simulate(comp_opt2, zeros(length(comp_opt2.S)), iters)
+res1 = simulate(comp_opt1, zeros(length(comp_opt1.S)), iters)
+res2 = simulate(comp_opt2, zeros(length(comp_opt2.S)), iters)
 
 @test res1 ≈ res2
 @test r11 ≈ res1
