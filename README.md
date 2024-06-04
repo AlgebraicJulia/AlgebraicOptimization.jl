@@ -5,6 +5,6 @@
 [![Code Coverage](https://codecov.io/gh/AlgebraicJulia/AlgebraicOptimization.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/AlgebraicJulia/AlgebraicOptimizatione.jl)
 [![CI/CD](https://github.com/AlgebraicJulia/AlgebraicOptimization.jl/actions/workflows/julia_ci.yml/badge.svg)](https://github.com/AlgebraicJulia/AlgebraicOptimization.jl/actions/workflows/julia_ci.yml)
 
-Building and solving (convex) optimization problems compositionally.
+Building and solving optimization problems compositionally.
 
-
+This package is an implementation of [A Compositional Framework for First-Order Optimization](https://arxiv.org/abs/2403.05711).
