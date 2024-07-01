@@ -68,6 +68,11 @@ function gradient_flow(f::Open{PrimalObjective})
     return Open{Optimizer}(f.S, x -> -ForwardDiff.gradient(f.o, x), f.m)
 end
 
+function solve(f::Open{PrimalObjective}, x0::Vector{Float64}, ss::Float64, n_steps::Int)
+    solver = Euler(gradient_flow(f), ss)
+    return simulate(solver, x0, n_steps)
+end
+
 # Saddle Problems and Dual Ascent
 #################################
 
