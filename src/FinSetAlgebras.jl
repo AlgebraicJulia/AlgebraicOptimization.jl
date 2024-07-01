@@ -87,6 +87,10 @@ function Open{T}(o::T) where T
     Open{T}(domain(o), o, id(domain(o)))
 end
 
+function Open{T}(o::T, m::FinFunction) where T
+    Open{T}(domain(o), o, m)
+end
+
 dom(obj::Open{T}) where T = dom(obj.m)
 
 # Implement the hom_map for a cospan-algebra based on the hom map for a finset-algebra.
