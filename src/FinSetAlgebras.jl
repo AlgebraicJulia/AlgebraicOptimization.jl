@@ -87,7 +87,7 @@ function Open{T}(o::T) where T
     Open{T}(domain(o), o, id(domain(o)))
 end
 
-function Open{T}(o::T, m::FinFunction)
+function Open{T}(o::T, m::FinFunction) where T
     Open{T}(domain(o), o, m)
 end
 
