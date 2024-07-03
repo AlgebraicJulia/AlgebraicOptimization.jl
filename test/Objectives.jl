@@ -48,3 +48,8 @@ r2 = simulate(dc2, x0, tsteps)
 @test r1 ≈ r2
 
 
+
+
+f = FinFunction([1, 2, 2, 3])
+v = [44, 55, 66]
+pullback(f, v)
