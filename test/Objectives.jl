@@ -9,6 +9,7 @@ d = @relation (x,y,z) begin
     h(u,w,z)
 end
 
+
 P = rand(-1:0.01:1,5,5)
 P = P'*P
 Q = rand(-1:0.01:1,3,3)
@@ -42,14 +43,4 @@ tsteps = 1000
 r1 = simulate(dc1, x0, tsteps)
 r2 = simulate(dc2, x0, tsteps)
 
-#println(r1)
-#println(r2)
-
 @test r1 ≈ r2
-
-
-
-
-f = FinFunction([1, 2, 2, 3])
-v = [44, 55, 66]
-pullback(f, v)

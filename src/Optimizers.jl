@@ -1,30 +1,14 @@
 # Implement the cospan-algebra of dynamical systems.
 module Optimizers
 
-export pullback_matrix, pushforward_matrix, Optimizer, OpenContinuousOpt, OpenDiscreteOpt, Euler,
-    simulate, typed_pullback_matrix, test_pullback_function, test_pushforward_function
+export Optimizer, OpenContinuousOpt, OpenDiscreteOpt, Euler,
+    simulate, pullback_function, pushforward_function
 
 using ..FinSetAlgebras
 import ..FinSetAlgebras: hom_map, laxator
 using Catlab
 import Catlab: oapply, dom
-using SparseArrays
 
-"""     pullback_matrix(f::FinFunction)
-
-The pullback of f : n → m is the linear map f^* : Rᵐ → Rⁿ defined by
-f^*(y)[i] = y[f(i)].
-"""
-function pullback_matrix(f::FinFunction)
-    n = length(dom(f))
-    sparse(1:n, f.(dom(f)), ones(Int, n), dom(f).n, codom(f).n)
-end
-
-"""     pushforward_matrix(f::FinFunction)
-
-The pushforward is the dual of the pullback.
-"""
-pushforward_matrix(f::FinFunction) = pullback_matrix(f)'
 
 """ Optimizer
 
@@ -47,7 +31,7 @@ struct DiscreteOpt <: FinSetAlgebra{Optimizer} end
 The hom map is defined as ϕ ↦ (s ↦ ϕ_*∘s∘ϕ^*).
 """
 hom_map(::ContinuousOpt, ϕ::FinFunction, s::Optimizer) =
-    Optimizer(codom(ϕ), x -> test_pushforward_function(ϕ, s(test_pullback_function(ϕ, x))))
+    Optimizer(codom(ϕ), x -> pushforward_function(ϕ, s(pullback_function(ϕ, x))))
 
 """     hom_map(::DiscreteOpt, ϕ::FinFunction, s::Optimizer)
 
@@ -55,8 +39,8 @@ The hom map is defined as ϕ ↦ (s ↦ id + ϕ_*∘(s - id)∘ϕ^*).
 """
 hom_map(::DiscreteOpt, ϕ::FinFunction, s::Optimizer) =
     Optimizer(codom(ϕ), x -> begin
-        y = test_pullback_function(ϕ, x)
-        return x + test_pushforward_function(ϕ, (s(y) - y))
+        y = pullback_function(ϕ, x)
+        return x + pushforward_function(ϕ, (s(y) - y))
     end)
 
 """     laxator(::ContinuousOpt, Xs::Vector{Optimizer})
@@ -65,7 +49,7 @@ Takes the "disjoint union" of a collection of optimizers.
 """
 function laxator(::ContinuousOpt, Xs::Vector{Optimizer})
     c = coproduct([dom(X) for X in Xs])
-    subsystems = [x -> X(test_pullback_function(l, x)) for (X, l) in zip(Xs, legs(c))]
+    subsystems = [x -> X(pullback_function(l, x)) for (X, l) in zip(Xs, legs(c))]
     function parallel_dynamics(x)
         res = Vector{Vector}(undef, length(Xs)) # Initialize storage for results
         for i = 1:length(Xs)        #=Threads.@threads=#
@@ -78,7 +62,14 @@ end
 # Same as continuous opt
 laxator(::DiscreteOpt, Xs::Vector{Optimizer}) = laxator(ContinuousOpt(), Xs)
 
+
 Open{Optimizer}(S::FinSet, v::Function, m::FinFunction) = Open{Optimizer}(S, Optimizer(S, v), m)
+Open{Optimizer}(s::Int, v::Function, m::FinFunction) = Open{Optimizer}(FinSet(s), v, m)
+
+# Special cases: m is an identity
+Open{Optimizer}(S::FinSet, v::Function) = Open{Optimizer}(S, Optimizer(S, v), id(S))
+Open{Optimizer}(s::Int, v::Function) = Open{Optimizer}(FinSet(s), v)
+
 
 # Turn into cospan-algebras.
 struct OpenContinuousOpt <: CospanAlgebra{Open{Optimizer}} end
@@ -95,13 +86,11 @@ end
 # Euler's method is a natural transformation from continous optimizers to discrete optimizers.
 function Euler(f::Open{Optimizer}, γ::Float64)
     return Open{Optimizer}(f.S,
-     Optimizer(f.S, x -> begin println(x); println(f.o(x)); println("hey there buddy"); println(f.o.dynamics);
-     x .+ γ .* f.o(x)
-    end), f.m)
+     Optimizer(f.S, x -> x .+ γ .* f.o(x)), f.m)
 end
 
 # Run a discrete optimizer the designated number of time-steps.
-function simulate(f::Open{Optimizer}, x0::Vector{Float64}, tsteps::Int)
+function simulate(f::Open{Optimizer}, x0::Vector, tsteps::Int)
     res = x0
     for i in 1:tsteps
         res = f.o(res)
@@ -110,122 +99,43 @@ function simulate(f::Open{Optimizer}, x0::Vector{Float64}, tsteps::Int)
 end
 
 
-function simulate(f::Open{Optimizer}, x0::Vector{Vector{Float64}}, tsteps::Int)
-    res = x0
-    for i in 1:tsteps
-        res = f.o(res)
-    end
-    return res
-end
+"""     pullback_function(f::FinFunction, v::Vector)
 
-
-
-
-
-
-function typed_pullback_matrix(f, domType, codomType)  # Modify code
-    # Track codomain indices
-    prefixes = Dict()
-    lastPrefix = 0
-
-    for v in codom(f)    # Assumes codom(f) is a set and has distinct elements
-        prefixes[v] = lastPrefix
-        lastPrefix += codomType(v)
-    end
-    # lastPrefix now holds the sum of the sizes across all the output vectors
-
-    domLength = 0
-    result = []
-    for v in dom(f)
-        domLength += domType(v)
-        for i in 1:domType(v)
-            push!(result, prefixes[f(v)] + i)
-        end
-    end
-
-    sparse(1:domLength, result, ones(Int, domLength), domLength, lastPrefix)
-end
-
-
-
-function typed_pullback_matrix(f)  # No types provided, so assume everything uses scalars
-
-    # println("inside typed")
-
-    domType = FinFunction(ones(Int, length(dom(f))))
-    codomType = FinFunction(ones(Int, length(codom(f))))
-
-    # Track codomain indices
-    prefixes = Dict()
-    lastPrefix = 0
-
-    for v in codom(f)    # Assumes codom(f) is a set and has distinct elements
-        prefixes[v] = lastPrefix
-        lastPrefix += codomType(v)
-    end
-    # lastPrefix now holds the sum of the sizes across all the output vectors
-
-    domLength = 0
-    result = []
-    for v in dom(f)
-        domLength += domType(v)
-        for i in 1:domType(v)
-            push!(result, prefixes[f(v)] + i)
-        end
-    end
-
-    sparse(1:domLength, result, ones(Int, domLength), domLength, lastPrefix)
-end
-
-
-typed_pushforward_matrix(f::FinFunction) = typed_pullback_matrix(f)'
-typed_pushforward_matrix(f::FinFunction, domType, codomType) = typed_pullback_matrix(f, domType, codomType)'
-
-
-
-function test_pullback_function(f::FinFunction, v::Vector)::Vector
+The pullback of f : n → m is the linear map f^* : Rᵐ → Rⁿ defined by
+f^*(y)[i] = y[f(i)].
+"""
+function pullback_function(f::FinFunction, v::Vector)::Vector
     return [v[f(i)] for i in 1:length(dom(f))]
 end
 
-function test_pushforward_function(f::FinFunction, v)::Vector
-    # output = zeros(length(codom(f)))
+
+"""     pushforward_matrix(f::FinFunction, v::Vector{Vector{Float64}})
+
+The pushforward of f : n → m is the linear map f_* : Rⁿ → Rᵐ defined by
+f_*(y)[j] =  ∑ y[i] for i ∈ f⁻¹(j).
+"""
+function pushforward_function(f::FinFunction, v::Vector{Vector{Float64}})::Vector
     output = [[] for _ in 1:length(codom(f))]
-
-
-    # output = Vector{Vector}(nothing, length(codom(f)))
-
-    # println(output)
-
     for i in 1:length(dom(f))
-        # println("i = ", i)
-        # println(output)
-        # println(output[f(i)])
-        # println()
         if isempty(output[f(i)])
             output[f(i)] = v[i]
         else
             output[f(i)] += v[i]
         end
     end
-
     return output
 end
 
 
-function test_pushforward_function(f::FinFunction, v::Vector{Float64})::Vector
-    # output = zeros(length(codom(f)))
+"""     pushforward_matrix(f::FinFunction, v)
+
+The pushforward of f : n → m is the linear map f_* : Rⁿ → Rᵐ defined by
+f_*(y)[j] =  ∑ y[i] for i ∈ f⁻¹(j).
+"""
+function pushforward_function(f::FinFunction, v::Vector{Float64})::Vector
     output = [0.0 for _ in 1:length(codom(f))]
 
-
-    # output = Vector{Vector}(nothing, length(codom(f)))
-
-    # println(output)
-
     for i in 1:length(dom(f))
-        # println("i = ", i)
-        # println(output)
-        # println(output[f(i)])
-        # println()
         output[f(i)] += v[i]
     end
 
@@ -233,17 +143,4 @@ function test_pushforward_function(f::FinFunction, v::Vector{Float64})::Vector
 end
 
 
-
-
-
-
-
-
-
-
-
 end  # module
-
-
-
-

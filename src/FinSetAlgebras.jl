@@ -84,7 +84,7 @@ portmap(obj::Open{T}) where T = obj.m
 
 # Helper function for when m is identity.
 function Open{T}(o::T) where T
-    Open{T}(domain(o), o, id(domain(o)))
+    Open{T}(dom(o), o, id(dom(o)))
 end
 
 dom(obj::Open{T}) where T = dom(obj.m)
