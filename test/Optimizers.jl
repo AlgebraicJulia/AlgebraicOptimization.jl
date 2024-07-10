@@ -1,4 +1,3 @@
-using Revise
 using AlgebraicOptimization
 using Catlab
 using Test
