@@ -10,7 +10,7 @@ using Catlab
 import Catlab: oapply, dom
 using ForwardDiff
 using Optim
-
+using ComponentArrays
 
 
 # Primal Minimization Problems and Gradient Descent
@@ -67,7 +67,20 @@ end
 Returns the gradient flow optimizer of a given primal objective.
 """
 function gradient_flow(f::Open{PrimalObjective})
-    return Open{Optimizer}(f.S, x -> -ForwardDiff.gradient(f.o, x), f.m)
+    function f_wrapper(ca::ComponentArray)
+        inputs = [ca[key] for key in keys(ca)]
+        f.o(inputs)
+    end
+
+    function gradient_descent(x)
+        init_conds = ComponentVector(;zip([Symbol(i) for i in 1:length(x)], x)...)
+        grad = -ForwardDiff.gradient(f_wrapper, init_conds)
+        [grad[key] for key in keys(grad)]
+    end
+
+    return Open{Optimizer}(f.S, x -> gradient_descent(x), f.m)
+
+    # return Open{Optimizer}(f.S, x -> -ForwardDiff.gradient(f.o, x), f.m)   # Scalar version
 end
 
 function solve(f::Open{PrimalObjective}, x0::Vector{Float64}, ss::Float64, n_steps::Int)

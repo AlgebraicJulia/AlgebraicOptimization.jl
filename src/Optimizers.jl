@@ -8,6 +8,7 @@ using ..FinSetAlgebras
 import ..FinSetAlgebras: hom_map, laxator
 using Catlab
 import Catlab: oapply, dom
+using ComponentArrays
 
 
 """ Optimizer
@@ -30,8 +31,9 @@ struct DiscreteOpt <: FinSetAlgebra{Optimizer} end
 
 The hom map is defined as ϕ ↦ (s ↦ ϕ_*∘s∘ϕ^*).
 """
-hom_map(::ContinuousOpt, ϕ::FinFunction, s::Optimizer) =
+function hom_map(::ContinuousOpt, ϕ::FinFunction, s::Optimizer) 
     Optimizer(codom(ϕ), x -> pushforward_function(ϕ, s(pullback_function(ϕ, x))))
+end
 
 """     hom_map(::DiscreteOpt, ϕ::FinFunction, s::Optimizer)
 
@@ -98,6 +100,42 @@ function simulate(f::Open{Optimizer}, x0::Vector, tsteps::Int)
     return res
 end
 
+# Run a discrete optimizer the designated number of time-steps.
+function simulate(f::Open{Optimizer}, d::AbstractUWD, x0::ComponentArray, tsteps::Int)
+    # Format initial conditions
+    initial_cond_vec = zeros(length(d[:variable]))
+    var_to_index = Dict()
+    curr_index = 1
+    for junction in d[:junction]
+        if !haskey(var_to_index, d[:variable][junction])
+            var_to_index[d[:variable][junction]] = curr_index
+            curr_index += 1
+        end
+    end
+
+    for (var, index) in var_to_index
+        initial_cond_vec[index] = x0[var]
+    end
+    res = initial_cond_vec
+    # Simulate
+    for i in 1:tsteps
+        res = f.o(res)
+    end
+
+    res_formatted = ComponentArray(a=1.1, b=22, c=33, d=44, e=55, f=66, g=77, h=88, i=99)
+
+    # Rebuild component array
+    for (var, index) in var_to_index
+        res_formatted[var] = res[index]
+    end
+    return res_formatted
+end
+
+function (f::Open{Optimizer})(x0::Vector)
+    return f.o(x0)
+end
+
+
 
 """     pullback_function(f::FinFunction, v::Vector)
 
@@ -109,7 +147,7 @@ function pullback_function(f::FinFunction, v::Vector)::Vector
 end
 
 
-"""     pushforward_matrix(f::FinFunction, v::Vector{Vector{Float64}})
+"""     pushforward_function(f::FinFunction, v::Vector{Vector{Float64}})
 
 The pushforward of f : n → m is the linear map f_* : Rⁿ → Rᵐ defined by
 f_*(y)[j] =  ∑ y[i] for i ∈ f⁻¹(j).
@@ -127,7 +165,7 @@ function pushforward_function(f::FinFunction, v::Vector{Vector{Float64}})::Vecto
 end
 
 
-"""     pushforward_matrix(f::FinFunction, v)
+"""     pushforward_function(f::FinFunction, v::Vector{Float64})
 
 The pushforward of f : n → m is the linear map f_* : Rⁿ → Rᵐ defined by
 f_*(y)[j] =  ∑ y[i] for i ∈ f⁻¹(j).

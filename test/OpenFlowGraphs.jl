@@ -1,8 +1,13 @@
 using Test
 using AlgebraicOptimization
+using Catlab
 
 
-
+d = @relation (x,y,z) begin
+    f(w,x)
+    g(u,w,y)
+    h(u,w,z)
+end
 
 g = random_open_flowgraph(10, .2, 3)
 A = node_incidence_matrix(data(g))

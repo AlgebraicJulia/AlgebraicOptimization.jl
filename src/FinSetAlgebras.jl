@@ -82,9 +82,13 @@ end
 data(obj::Open{T}) where T = obj.o
 portmap(obj::Open{T}) where T = obj.m
 
-# Helper function for when m is identity.
+# Helper functions for when m is identity.
 function Open{T}(o::T) where T
     Open{T}(dom(o), o, id(dom(o)))
+end
+
+function Open{T}(S::FinSet, o::T) where T
+    Open{T}(S, o, id(dom(o)))
 end
 
 function Open{T}(o::T, m::FinFunction) where T
