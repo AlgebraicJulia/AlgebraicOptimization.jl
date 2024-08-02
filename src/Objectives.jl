@@ -10,6 +10,8 @@ using Catlab
 import Catlab: oapply, dom
 using ForwardDiff
 using Optim
+using ComponentArrays
+
 
 # Primal Minimization Problems and Gradient Descent
 ###################################################
@@ -38,7 +40,7 @@ struct MinObj <: FinSetAlgebra{PrimalObjective} end
 The morphism map is defined by ϕ ↦ (f ↦ f∘ϕ^*).
 """
 hom_map(::MinObj, ϕ::FinFunction, p::PrimalObjective) = 
-    PrimalObjective(codom(ϕ), x->p(pullback_matrix(ϕ)*x))
+    PrimalObjective(codom(ϕ), x->p(pullback_function(ϕ, x)))
 
 """     laxator(::MinObj, Xs::Vector{PrimalObjective})
 
@@ -46,7 +48,7 @@ Takes the "disjoint union" of a collection of primal objectives.
 """
 function laxator(::MinObj, Xs::Vector{PrimalObjective})
     c = coproduct([dom(X) for X in Xs])
-    subproblems = [x -> X(pullback_matrix(l)*x) for (X,l) in zip(Xs, legs(c))]
+    subproblems = [x -> X(pullback_function(l, x)) for (X,l) in zip(Xs, legs(c))]
     objective(x) = sum([sp(x) for sp in subproblems])
     return PrimalObjective(apex(c), objective)
 end
@@ -65,7 +67,20 @@ end
 Returns the gradient flow optimizer of a given primal objective.
 """
 function gradient_flow(f::Open{PrimalObjective})
-    return Open{Optimizer}(f.S, x -> -ForwardDiff.gradient(f.o, x), f.m)
+    function f_wrapper(ca::ComponentArray)
+        inputs = [ca[key] for key in keys(ca)]
+        f.o(inputs)
+    end
+
+    function gradient_descent(x)
+        init_conds = ComponentVector(;zip([Symbol(i) for i in 1:length(x)], x)...)
+        grad = -ForwardDiff.gradient(f_wrapper, init_conds)
+        [grad[key] for key in keys(grad)]
+    end
+
+    return Open{Optimizer}(f.S, x -> gradient_descent(x), f.m)
+
+    # return Open{Optimizer}(f.S, x -> -ForwardDiff.gradient(f.o, x), f.m)   # Scalar version
 end
 
 function solve(f::Open{PrimalObjective}, x0::Vector{Float64}, ss::Float64, n_steps::Int)
@@ -101,14 +116,14 @@ struct DualComp <: FinSetAlgebra{SaddleObjective} end
 # Only "glue" along dual variables
 hom_map(::DualComp, ϕ::FinFunction, p::SaddleObjective) = 
     SaddleObjective(p.primal_space, codom(ϕ), 
-        (x,λ) -> p(x, pullback_matrix(ϕ)*λ))
+        (x,λ) -> p(x, pullback_function(ϕ, λ)))
 
 # Laxate along both primal and dual variables
 function laxator(::DualComp, Xs::Vector{SaddleObjective})
     c1 = coproduct([X.primal_space for X in Xs])
     c2 = coproduct([X.dual_space for X in Xs])
     subproblems = [(x,λ) -> 
-        X(pullback_matrix(l1)*x, pullback_matrix(l2)*λ) for (X,l1,l2) in zip(Xs, legs(c1), legs(c2))]
+        X(pullback_function(l1, x), pullback_function(l2, λ)) for (X,l1,l2) in zip(Xs, legs(c1), legs(c2))]
     objective(x,λ) = sum([sp(x,λ) for sp in subproblems])
     return SaddleObjective(apex(c1), apex(c2), objective)
 end
@@ -128,4 +143,4 @@ function gradient_flow(of::Open{SaddleObjective})
         λ -> ForwardDiff.gradient(dual_objective(f, x(λ)), λ), of.m)
 end
 
-end
+end  # module
