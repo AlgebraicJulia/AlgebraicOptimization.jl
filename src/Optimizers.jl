@@ -103,7 +103,7 @@ end
 # Run a discrete optimizer the designated number of time-steps.
 function simulate(f::Open{Optimizer}, d::AbstractUWD, x0::ComponentArray, tsteps::Int)
     # Format initial conditions
-    initial_cond_vec = zeros(length(d[:variable]))
+    initial_cond_vec = Vector{Any}(undef, length(d[:variable]))
     var_to_index = Dict()
     curr_index = 1
     for junction in d[:junction]
@@ -122,7 +122,7 @@ function simulate(f::Open{Optimizer}, d::AbstractUWD, x0::ComponentArray, tsteps
         res = f.o(res)
     end
 
-    res_formatted = ComponentArray(a=1.1, b=22, c=33, d=44, e=55, f=66, g=77, h=88, i=99)
+    res_formatted = copy(x0)
 
     # Rebuild component array
     for (var, index) in var_to_index

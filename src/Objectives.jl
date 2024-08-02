@@ -73,7 +73,7 @@ function gradient_flow(f::Open{PrimalObjective})
     end
 
     function gradient_descent(x)
-        init_conds = ComponentVector(;zip([Symbol(i) for i in 1:length(x)], x)...)
+        init_conds = ComponentVector(;zip([Symbol(i) for i in eachindex(x)], x)...)
         grad = -ForwardDiff.gradient(f_wrapper, init_conds)
         [grad[key] for key in keys(grad)]
     end

@@ -104,6 +104,8 @@ r2 = simulate(dc2, d, x2, tsteps)
 @test r1 ≈ r2
 
 
+
+
 # Test naturality of gradient descent: vector variables
 d = @relation (x,y,z) begin
     f(w,x)
@@ -138,5 +140,45 @@ x1::Vector{Vector{Float64}} = [[1, 1, 2], [2, 2], [3, 3], [4, 4], [1, 1], [2], [
 tsteps = 1000
 r1 = simulate(dc1, x1, tsteps)
 r2 = simulate(dc2, x1, tsteps)
+
+@test r1 ≈ r2
+
+
+# Test ComponentArray version of input/output on vector variables
+# Note that all variables must be exposed to use this i/o system
+d = @relation () begin
+    f(a, b, c, d, e)
+    g(f, g, a)
+    h(b, a, f, h)
+end
+
+f1 = x -> x[1][1] + x[4][1] - x[3][2] / x[2][1]
+f2 = x -> 22 * x[2][2] / x[3][1]
+f3 = x -> sum(sum(v) for v in x)
+
+
+p1 = Open{PrimalObjective}(FinSet(5), PrimalObjective(FinSet(5), f1))
+p2 = Open{PrimalObjective}(FinSet(3), PrimalObjective(FinSet(3), f2))
+p3 = Open{PrimalObjective}(FinSet(4), PrimalObjective(FinSet(4), f3))
+
+
+composite_prob = oapply(d, [p1,p2,p3])
+
+optimizer_of_composite = gradient_flow(composite_prob)
+
+o1 = Euler(gradient_flow(p1), 0.1)
+o2 = Euler(gradient_flow(p2), 0.1)
+o3 = Euler(gradient_flow(p3), 0.1)
+
+composite_of_optimizers = oapply(OpenDiscreteOpt(), d, [o1,o2,o3])
+
+dc1 = Euler(optimizer_of_composite, 0.1)
+dc2 = composite_of_optimizers
+
+
+x3 = ComponentArray(a=[2, 4, 6], b=[3, 5], c=[7, 9], d=[3, 4, 5, 6], e=[6, 6, 6], f=[8, 9], g=[10, 11, 12], h=[30, 33], i=[-2, 1.5])
+tsteps = 1000
+r1 = simulate(dc1, d, x3, tsteps)
+r2 = simulate(dc2, d, x3, tsteps)
 
 @test r1 ≈ r2
