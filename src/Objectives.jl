@@ -26,7 +26,7 @@ struct PrimalObjective
     decision_space::FinSet
     objective::Function # R^ds -> R NOTE: should be autodifferentiable
 end
-(p::PrimalObjective)(x::Vector) = p.objective(x)
+(p::PrimalObjective)(x) = p.objective(x)    # Removed x::Vector hard typing
 dom(p::PrimalObjective) = p.decision_space
 
 """     MinObj
@@ -69,7 +69,7 @@ Returns the gradient flow optimizer of a given primal objective.
 function gradient_flow(f::Open{PrimalObjective})
     function f_wrapper(ca::ComponentArray)
         inputs = [ca[key] for key in keys(ca)]
-        f.o(inputs)
+        f.o(inputs)    # To spread or not to spread?|
     end
 
     function gradient_descent(x)
@@ -96,6 +96,15 @@ struct SaddleObjective
     dual_space::FinSet
     objective::Function # x × λ → R
 end
+
+# struct SaddleObjective
+#     decision_space::FinSet
+#     type::decision_space -> Bool
+#     objective::Function # x × λ → R
+# end
+
+
+
 
 (p::SaddleObjective)(x,λ) = p.objective(x,λ)
 

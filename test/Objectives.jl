@@ -96,7 +96,7 @@ dc1 = Euler(optimizer_of_composite, 0.1)
 dc2 = composite_of_optimizers
 
 
-x2 = ComponentArray(a=11, b=22, c=33, d=44, e=55, f=66, g=77, h=88, i=99)
+x2 = ComponentArray(a=11.0, b=22, c=33, d=44, e=55, f=66, g=77, h=88, i=99)
 tsteps = 1000
 r1 = simulate(dc1, d, x2, tsteps)
 r2 = simulate(dc2, d, x2, tsteps)
