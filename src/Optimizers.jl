@@ -2,13 +2,15 @@
 module Optimizers
 
 export Optimizer, OpenContinuousOpt, OpenDiscreteOpt, Euler,
-    simulate, pullback_function, pushforward_function
+    simulate, pullback_function, pushforward_function, isapprox
 
 using ..FinSetAlgebras
 import ..FinSetAlgebras: hom_map, laxator
 using Catlab
 import Catlab: oapply, dom
 using ComponentArrays
+import Base.isapprox
+
 
 
 """ Optimizer
@@ -181,4 +183,48 @@ function pushforward_function(f::FinFunction, v::Vector{Float64})::Vector
 end
 
 
+function isapprox(r1::Vector{Float64}, r2::Vector{Float64})
+      if length(r1) != length(r2)
+        return false
+      end
+  
+      for i in eachindex(r1)
+        if !isapprox(r1[i], r2[i]; rtol=1e-4)
+          return false
+        end
+      end
+      return true
+  end
+  
+  function isapprox(r1::Vector{Vector{Float64}}, r2::Vector{Vector{Float64}})
+      if length(r1) != length(r2)
+        return false
+      end
+  
+      for i in eachindex(r1)
+        if !(r1[i] ≈ r2[i])
+          return false
+        end
+      end
+      return true
+  end
+  
+  function isapprox(r1::ComponentArray, r2::ComponentArray)
+      if length(r1) != length(r2)
+        return false
+      end
+  
+      for i in eachindex(r1)
+        if !isapprox(r1[i], r2[i]; rtol=1e-4)
+          return false
+        end
+      end
+      return true
+  end
+
+
+
 end  # module
+
+
+
