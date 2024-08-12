@@ -5,7 +5,7 @@ using ComponentArrays
 
 # Test naturality of gradient descent: scalar variables
 d = @relation (x,y,z) begin
-    f(w,x)
+    f(w,x) 
     g(u,w,y)
     h(u,w,z)
 end
@@ -50,7 +50,7 @@ tsteps = 1000
 r1 = simulate(dc1, x0, tsteps)
 r2 = simulate(dc2, x0, tsteps)
 
-@test r1 ≈ r2
+@test r1 ≅ r2
 
 
 # Test ComponentArray version of input/output on scalar variables
@@ -101,7 +101,7 @@ tsteps = 1000
 r1 = simulate(dc1, d, x2, tsteps)
 r2 = simulate(dc2, d, x2, tsteps)
 
-@test r1 ≈ r2
+@test r1 ≅ r2
 
 
 
@@ -141,7 +141,7 @@ tsteps = 1000
 r1 = simulate(dc1, x1, tsteps)
 r2 = simulate(dc2, x1, tsteps)
 
-@test r1 ≈ r2
+@test r1 ≅ r2
 
 
 # Test ComponentArray version of input/output on vector variables
@@ -181,4 +181,15 @@ tsteps = 1000
 r1 = simulate(dc1, d, x3, tsteps)
 r2 = simulate(dc2, d, x3, tsteps)
 
-@test r1 ≈ r2
+@test r1 ≅ r2
+
+
+input = ComponentArray(
+  u = [10, 20, 30],
+  v = [10, 20],
+  w = [-5, -5],
+  x = [10], 
+  y = [40, 40, 40],
+  z = [-30, -30, -40, -50])
+
+

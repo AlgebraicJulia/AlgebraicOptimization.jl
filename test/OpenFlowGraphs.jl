@@ -48,7 +48,7 @@ opt2 = Euler(gradient_flow(p_comp2), γ)
 r11 = simulate(opt1, zeros(length(opt1.S)), iters)
 r22 = simulate(opt2, zeros(length(opt2.S)), iters)
 
-@test r11 ≈ r22
+@test r11 ≅ r22
 
 o1 = dual_decomposition(g1, 0.1)
 o2 = dual_decomposition(g2, 0.1)
@@ -64,8 +64,8 @@ comp_opt2 = dual_decomposition(g_comp, γ)
 res1 = simulate(comp_opt1, zeros(length(comp_opt1.S)), iters)
 res2 = simulate(comp_opt2, zeros(length(comp_opt2.S)), iters)
 
-@test res1 ≈ res2
-@test r11 ≈ res1
+@test res1 ≅ res2
+@test r11 ≅ res1
 
 opt3 = Euler(gradient_flow(p3), 0.1)
 

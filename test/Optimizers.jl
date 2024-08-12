@@ -33,7 +33,7 @@ tsteps = 100
 r1 = simulate(discretization_of_composites, x0, tsteps)
 r2 = simulate(composite_of_discretizations, x0, tsteps)
 
-@test r1 ≈ r2
+@test r1 ≅ r2
 
 
 
@@ -69,7 +69,7 @@ tsteps = 100
 r1 = simulate(discretization_of_composites, x1, tsteps)
 r2 = simulate(composite_of_discretizations, x1, tsteps)
 
-@test r1 ≈ r2
+@test r1 ≅ r2
 
 
 # Test ComponentArray version of input/output
@@ -104,4 +104,4 @@ tsteps = 100
 r1 = simulate(discretization_of_composites, d, x2, tsteps)
 r2 = simulate(composite_of_discretizations, d, x2, tsteps)
 
-@test r1 ≈ r2
+@test r1 ≅ r2
