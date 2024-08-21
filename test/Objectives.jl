@@ -3,6 +3,8 @@ using Test
 using Catlab
 using ComponentArrays
 
+seed_random()
+
 # Test naturality of gradient descent: scalar variables
 d = @relation (x,y,z) begin
     f(w,x) 

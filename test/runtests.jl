@@ -1,7 +1,7 @@
 using Test
 using ComponentArrays
 using AlgebraicOptimization
-
+using Random
 
 # Term-by-term approximately equal utility functions for testing
 function ≅(r1::Vector{Float64}, r2::Vector{Float64})
@@ -10,7 +10,7 @@ function ≅(r1::Vector{Float64}, r2::Vector{Float64})
   end
 
   for i in eachindex(r1)
-    if !isapprox(r1[i], r2[i]; rtol=.05)
+    if !isapprox(r1[i], r2[i]; rtol=.001)
       return false
     end
   end
@@ -36,13 +36,17 @@ function ≅(r1::ComponentArray, r2::ComponentArray)
   end
 
   for i in eachindex(r1)
-    if !isapprox(r1[i], r2[i]; rtol=.05)
+    if !isapprox(r1[i], r2[i]; rtol=.001)
       return false
     end
   end
   return true
 end
 
+function seed_random()
+  Random.seed!(1234)
+  println("seeded 1234")
+end
 
 
 @testset "Open Optimization Problems" begin

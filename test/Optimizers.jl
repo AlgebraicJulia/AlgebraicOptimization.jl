@@ -2,6 +2,8 @@ using AlgebraicOptimization
 using Catlab
 using Test
 
+seed_random()
+
 # Test naturality of Euler with scalar functions
 d = @relation (x,y,z,u,w) begin
     f(w,x)
