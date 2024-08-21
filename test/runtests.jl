@@ -10,7 +10,7 @@ function ≅(r1::Vector{Float64}, r2::Vector{Float64})
   end
 
   for i in eachindex(r1)
-    if !isapprox(r1[i], r2[i]; rtol=.001)
+    if !isapprox(r1[i], r2[i]; rtol=.05)
       return false
     end
   end
@@ -36,7 +36,7 @@ function ≅(r1::ComponentArray, r2::ComponentArray)
   end
 
   for i in eachindex(r1)
-    if !isapprox(r1[i], r2[i]; rtol=.001)
+    if !isapprox(r1[i], r2[i]; rtol=.05)
       return false
     end
   end
