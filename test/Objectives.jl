@@ -56,7 +56,7 @@ r2 = simulate(dc2, x0, tsteps)
 
 
 # Test ComponentArray version of input/output on scalar variables
-# Note that all variables must be exposed to use this i/o system
+
 d = @relation () begin
     f(a, b, c, d, e)
     g(f, g, a)
@@ -98,13 +98,12 @@ dc1 = Euler(optimizer_of_composite, 0.1)
 dc2 = composite_of_optimizers
 
 
-x2 = ComponentArray(a=11.0, b=22, c=33, d=44, e=55, f=66, g=77, h=88, i=99)
+x2 = ComponentArray(a=11.0, b=22, c=33, d=44, e=55, f=66, g=77, h=88)
 tsteps = 1000
 r1 = simulate(dc1, d, x2, tsteps)
 r2 = simulate(dc2, d, x2, tsteps)
 
 @test r1 ≅ r2
-
 
 
 
@@ -147,7 +146,7 @@ r2 = simulate(dc2, x1, tsteps)
 
 
 # Test ComponentArray version of input/output on vector variables
-# Note that all variables must be exposed to use this i/o system
+
 d = @relation () begin
     f(a, b, c, d, e)
     g(f, g, a)
@@ -178,7 +177,7 @@ dc1 = Euler(optimizer_of_composite, 0.1)
 dc2 = composite_of_optimizers
 
 
-x3 = ComponentArray(a=[2, 4, 6], b=[3, 5], c=[7, 9], d=[3, 4, 5, 6], e=[6, 6, 6], f=[8, 9], g=[10, 11, 12], h=[30, 33], i=[-2, 1.5])
+x3 = ComponentArray(a=[2.0, 4, 6], b=[3, 5], c=[7, 9], d=[3, 4, 5, 6], e=[6, 6, 6], f=[8, 9], g=[10, 11, 12], h=[30, 33])
 tsteps = 1000
 r1 = simulate(dc1, d, x3, tsteps)
 r2 = simulate(dc2, d, x3, tsteps)
@@ -195,3 +194,4 @@ input = ComponentArray(
   z = [-30, -30, -40, -50])
 
 
+  

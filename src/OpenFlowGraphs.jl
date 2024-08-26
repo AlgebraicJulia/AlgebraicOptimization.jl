@@ -49,7 +49,7 @@ struct FG <: FinSetAlgebra{FlowGraph} end
 hom_map(::FG, ϕ::FinFunction, g::FlowGraph) =
     FlowGraph(codom(ϕ), g.edges, 
         g.src⋅ϕ, g.tgt⋅ϕ, 
-        g.edge_costs, pushforward_function(ϕ, g.flows))
+        g.edge_costs, pushforward_function(ϕ)(g.flows))
 
 function laxator(::FG, gs::Vector{FlowGraph})
     laxed_src = reduce(⊕, [g.src for g in gs])

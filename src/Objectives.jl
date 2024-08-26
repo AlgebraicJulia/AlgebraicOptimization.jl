@@ -48,7 +48,7 @@ Takes the "disjoint union" of a collection of primal objectives.
 """
 function laxator(::MinObj, Xs::Vector{PrimalObjective})
     c = coproduct([dom(X) for X in Xs])
-    subproblems = [x -> X(pullback_function(l, x)) for (X,l) in zip(Xs, legs(c))]
+    subproblems = [x -> X(pullback_function(l)(x)) for (X,l) in zip(Xs, legs(c))]
     objective(x) = sum([sp(x) for sp in subproblems])
     return PrimalObjective(apex(c), objective)
 end
@@ -125,14 +125,14 @@ struct DualComp <: FinSetAlgebra{SaddleObjective} end
 # Only "glue" along dual variables
 hom_map(::DualComp, ϕ::FinFunction, p::SaddleObjective) = 
     SaddleObjective(p.primal_space, codom(ϕ), 
-        (x,λ) -> p(x, pullback_function(ϕ, λ)))
+        (x,λ) -> p(x, pullback_function(ϕ)(λ)))
 
 # Laxate along both primal and dual variables
 function laxator(::DualComp, Xs::Vector{SaddleObjective})
     c1 = coproduct([X.primal_space for X in Xs])
     c2 = coproduct([X.dual_space for X in Xs])
     subproblems = [(x,λ) -> 
-        X(pullback_function(l1, x), pullback_function(l2, λ)) for (X,l1,l2) in zip(Xs, legs(c1), legs(c2))]
+        X(pullback_function(l1)(x), pullback_function(l2)(λ)) for (X,l1,l2) in zip(Xs, legs(c1), legs(c2))]
     objective(x,λ) = sum([sp(x,λ) for sp in subproblems])
     return SaddleObjective(apex(c1), apex(c2), objective)
 end

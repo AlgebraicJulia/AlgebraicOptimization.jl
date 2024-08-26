@@ -1,15 +1,14 @@
 # Implement the cospan-algebra of dynamical systems.
 module Optimizers
 
-export Optimizer, OpenContinuousOpt, OpenDiscreteOpt, Euler,
-    simulate, pullback_function, pushforward_function, isapprox
+export pullback_matrix, pushforward_matrix, Optimizer, OpenContinuousOpt, OpenDiscreteOpt, Euler,
+    simulate, pullback_function, pushforward_function
 
 using ..FinSetAlgebras
 import ..FinSetAlgebras: hom_map, laxator
 using Catlab
 import Catlab: oapply, dom
 using ComponentArrays
-import Base.isapprox
 
 
 
@@ -34,7 +33,7 @@ struct DiscreteOpt <: FinSetAlgebra{Optimizer} end
 The hom map is defined as ϕ ↦ (s ↦ ϕ_*∘s∘ϕ^*).
 """
 function hom_map(::ContinuousOpt, ϕ::FinFunction, s::Optimizer) 
-    Optimizer(codom(ϕ), x -> pushforward_function(ϕ, s(pullback_function(ϕ, x))))
+    Optimizer(codom(ϕ), x -> pushforward_function(ϕ)(s(pullback_function(ϕ)(x))))
 end
 
 """     hom_map(::DiscreteOpt, ϕ::FinFunction, s::Optimizer)
@@ -43,8 +42,8 @@ The hom map is defined as ϕ ↦ (s ↦ id + ϕ_*∘(s - id)∘ϕ^*).
 """
 hom_map(::DiscreteOpt, ϕ::FinFunction, s::Optimizer) =
     Optimizer(codom(ϕ), x -> begin
-        y = pullback_function(ϕ, x)
-        return x + pushforward_function(ϕ, (s(y) - y))
+        y = pullback_function(ϕ)(x)
+        return x + pushforward_function(ϕ)((s(y) - y))
     end)
 
 """     laxator(::ContinuousOpt, Xs::Vector{Optimizer})
@@ -53,7 +52,7 @@ Takes the "disjoint union" of a collection of optimizers.
 """
 function laxator(::ContinuousOpt, Xs::Vector{Optimizer})
     c = coproduct([dom(X) for X in Xs])
-    subsystems = [x -> X(pullback_function(l, x)) for (X, l) in zip(Xs, legs(c))]
+    subsystems = [x -> X(pullback_function(l)(x)) for (X, l) in zip(Xs, legs(c))]
     function parallel_dynamics(x)
         res = Vector{Vector}(undef, length(Xs)) # Initialize storage for results
         for i = 1:length(Xs)        #=Threads.@threads=#
@@ -143,9 +142,23 @@ end
 
 The pullback of f : n → m is the linear map f^* : Rᵐ → Rⁿ defined by
 f^*(y)[i] = y[f(i)].
+
+This is the uncurried version.
 """
 function pullback_function(f::FinFunction, v::Vector)::Vector
     return [v[f(i)] for i in 1:length(dom(f))]
+end
+
+
+"""     pullback_function(f::FinFunction)
+
+The pullback of f : n → m is the linear map f^* : Rᵐ → Rⁿ defined by
+f^*(y)[i] = y[f(i)].
+
+This is the curried version.
+"""
+function pullback_function(f::FinFunction)
+    return v -> pullback_function(f, v)
 end
 
 
@@ -153,6 +166,8 @@ end
 
 The pushforward of f : n → m is the linear map f_* : Rⁿ → Rᵐ defined by
 f_*(y)[j] =  ∑ y[i] for i ∈ f⁻¹(j).
+
+This is the uncurried version for vectors of vectors.
 """
 function pushforward_function(f::FinFunction, v::Vector{Vector{Float64}})::Vector
     output = [[] for _ in 1:length(codom(f))]
@@ -171,6 +186,8 @@ end
 
 The pushforward of f : n → m is the linear map f_* : Rⁿ → Rᵐ defined by
 f_*(y)[j] =  ∑ y[i] for i ∈ f⁻¹(j).
+
+This is the uncurried version for vectors of floats.
 """
 function pushforward_function(f::FinFunction, v::Vector{Float64})::Vector
     output = [0.0 for _ in 1:length(codom(f))]
@@ -182,9 +199,32 @@ function pushforward_function(f::FinFunction, v::Vector{Float64})::Vector
     return output
 end
 
+"""     pushforward_function(f::FinFunction)
+
+The pushforward of f : n → m is the linear map f_* : Rⁿ → Rᵐ defined by
+f_*(y)[j] =  ∑ y[i] for i ∈ f⁻¹(j).
+
+This is the curried version.
+"""
+function pushforward_function(f::FinFunction)
+    return v -> pushforward_function(f, v)
+end
+
+"""     pullback_matrix(f::FinFunction)
+
+The pullback of f : n → m is the linear map f^* : Rᵐ → Rⁿ defined by
+f^*(y)[i] = y[f(i)].
+"""
+function pullback_matrix(f::FinFunction)
+    n = length(dom(f))
+    sparse(1:n, f.(dom(f)), ones(Int,n), dom(f).n, codom(f).n)
+end
+
+"""     pushforward_matrix(f::FinFunction)
+
+The pushforward is the dual of the pullback.
+"""
+pushforward_matrix(f::FinFunction) = pullback_matrix(f)'
 
 
 end  # module
-
-
-

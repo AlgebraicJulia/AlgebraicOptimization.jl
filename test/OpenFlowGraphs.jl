@@ -10,16 +10,6 @@ d = @relation (x,y,z) begin
     h(u,w,z)
 end
 
-g = random_open_flowgraph(10, .2, 3)
-A = node_incidence_matrix(data(g))
-p = to_problem(g)
-o1 = Euler(gradient_flow(p), 0.01)
-o2 = dual_decomposition(g, 0.01)
-
-dual_sol1 = simulate(o1, zeros(10), 10)
-dual_sol2 = simulate(o2, zeros(10), 10)
-
-
 
 # Test flow graph composition
 g1 = random_open_flowgraph(10, .2, 2)

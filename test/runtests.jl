@@ -45,7 +45,6 @@ end
 
 function seed_random()
   Random.seed!(1234)
-  println("seeded 1234")
 end
 
 

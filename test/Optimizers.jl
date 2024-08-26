@@ -100,7 +100,7 @@ do3 = Euler(o3, 0.01)
 
 composite_of_discretizations = oapply(OpenDiscreteOpt(), d, [do1,do2,do3])
 
-x2 = ComponentArray(a=11.2, b=22, c=33, d=44, e=55, f=66, g=77, h=88, i=99)
+x2 = ComponentArray(a=11.0, b=22, c=33, d=44, e=55, f=66, g=77, h=88, i=99)
 
 tsteps = 100
 r1 = simulate(discretization_of_composites, d, x2, tsteps)
