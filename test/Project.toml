@@ -1,6 +1,7 @@
 [deps]
 AlgebraicOptimization = "a72ceada-00ec-4ad9-90d3-37b40eaed052"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
-AlgebraicDynamics = "5fd6ff03-a254-427e-8840-ba658f502e32"
 Catlab = "134e5e36-593f-5add-ad60-77f754baafbe"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
+ComponentArrays = "b0b7db55-cfe3-40fc-9ded-d10e2dbeff66"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"

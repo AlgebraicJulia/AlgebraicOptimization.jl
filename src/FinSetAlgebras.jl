@@ -2,7 +2,7 @@
 # TODO: upstream into Catlab.jl
 module FinSetAlgebras
 
-export FinSetAlgebra, CospanAlgebra, Open, hom_map, laxator, data, portmap
+export FinSetAlgebra, CospanAlgebra, Open, hom_map, laxator, data, portmap, draw, draw_types
 
 using LinearAlgebra, SparseArrays
 using Catlab
@@ -82,9 +82,13 @@ end
 data(obj::Open{T}) where T = obj.o
 portmap(obj::Open{T}) where T = obj.m
 
-# Helper function for when m is identity.
+# Helper functions for when m is identity.
 function Open{T}(o::T) where T
-    Open{T}(domain(o), o, id(domain(o)))
+    Open{T}(dom(o), o, id(dom(o)))
+end
+
+function Open{T}(S::FinSet, o::T) where T
+    Open{T}(S, o, id(dom(o)))
 end
 
 function Open{T}(o::T, m::FinFunction) where T
@@ -142,4 +146,14 @@ function oapply(CA::CospanAlgebra{Open{T}}, FA::FinSetAlgebra{T}, d::AbstractUWD
     return oapply(CA, FA, uwd_to_cospan(d), Xs)
 end
 
+
+function draw(uwd)
+    to_graphviz(uwd, box_labels=:name, junction_labels=:variable, edge_attrs=Dict(:len => ".75"))
 end
+
+function draw_types(uwd)   # Add better typing and error catching for if uwd is untyped
+    to_graphviz(uwd, box_labels=:name, junction_labels=:junction_type, edge_attrs=Dict(:len => ".75"))
+end
+
+
+end  # module
