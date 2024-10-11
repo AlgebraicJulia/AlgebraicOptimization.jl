@@ -2,6 +2,7 @@ using AlgebraicOptimization
 using Test
 
 
+
 # Example sheaf 1: (a, b) -> b <- (b, c)
 # Underlying graph: *-------*  (2 vertices, 1 edge)
 # a, b, and c are each 1-element vectors
@@ -12,7 +13,7 @@ add_map!(sheaf_1, 1, 1, [0 1.; 0 0])
 add_map!(sheaf_1, 2, 1, [1. 0; 0 0]) 
 
 # Tests
-test_arr = [1 2 3 4]   # V1 holds (1, 2) and V2 holds (3, 4)
+test_arr = [1 2 3 4]   # V1 holds (1, 2) and V2 holds (3, 4)     Could switch to a list w/ commas (vector) to avoid '
 @test !(laplacian(sheaf_1) * test_arr' ≈ [0, 0, 0, 0])
 
 test_arr = [1 2 2 4]   # V1 holds (1, 2) and V2 holds (2, 4)
@@ -86,3 +87,19 @@ test_arr = [10 20 20 30 30 50] # V1 holds (1, 2), V2 holds (20, 30), V3 holds (3
 
 test_arr = [10 20 20 30 30 10]   # V1 holds (1, 2), V2 holds (20, 30), V3 holds (30, 10)
 @test laplacian(sheaf_4) * test_arr' ≈ zeros(6)
+
+
+# SheafObjective test: Uzawa's algorithm. Currently not very distributed.
+
+sheaf_5 = CellularSheaf(2, 1, 1)
+add_map!(sheaf_5, 1, 1, reshape([1.0], 1, 1))
+add_map!(sheaf_5, 2, 1, reshape([1.0], 1, 1))
+
+sheaf_objective_5 = SheafObjective([x -> x^2, x -> (x -2)^2], sheaf_5, [4, 6], [0, 0])
+
+apply_f_with_stabilizer(sheaf_objective_5)
+
+simulate!(sheaf_objective_5)
+
+@test sheaf_objective_5.x ≈ [1.0, 1.0] atol=1e-2
+sheaf_objective_5.z
