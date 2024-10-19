@@ -4,6 +4,7 @@ export CellularSheaf, add_map!, coboundary_map, laplacian, is_global_section, Sh
 
 using BlockArrays
 using ForwardDiff
+using Distributed
 
 
 struct CellularSheaf
@@ -89,14 +90,76 @@ function apply_lagrangian_to_z(so::SheafObjective)
 end
 
 
-function simulate!(so::SheafObjective, λ::Float64 = .1, n_steps::Int = 100)  # Like Uzawa's algorithm. Currently not very distributed.
+function simulate!(so::SheafObjective, λ::Float64 = .1, n_steps::Int = 100)  # Uzawa's algorithm. Currently not very distributed.
     for _ in 1:n_steps
         x_update = -ForwardDiff.gradient(apply_lagrangian_to_x(so), so.x)   # Ideally, these should be done separately for the individual x's.
-        so.x += x_update * λ
-
         z_update = ForwardDiff.gradient(apply_lagrangian_to_z(so), so.z)   # Ideally, these should be done separately for the individual z's.
+        
+        so.x += x_update * λ
         so.z += z_update * λ
+        # println(z_update - laplacian(so.s) * so.x)   <-- Sanity check; always should be 0
     end
 end
+
+
+# mutable struct SheafNode
+#     adj::Vector{Int}    # Indices of neighboring SheafNodes
+#     maps::Vector{Array}   # maps[i] corresponds to the resrtiction map from the SheafNode to the edge connecting it to adj[i]
+#     f::Function    # Objective function at vertex
+#     x::Vector  # Primary variables
+#     z::Vector  # Dual variables
+# end
+
+
+mutable struct SheafNode
+    adj::Dict{SheafNode, Array}
+    f::Function    # Objective function at vertex
+    x::Vector  # Primary variables
+    z::Vector  # Dual variables
+end
+
+function SheafNode(f::Function, x::Vector, z::Vector)
+    return SheafNode(Dict(), f, x, z)
+end
+
+function add_edge!(u::SheafNode, v::SheafNode, u_map::Array, v_map::Array)
+    u.adj[v] = u_map
+    v.adj[u] = v_map
+end
+
+
+function simulate!(sheaf::Vector{SheafNode}, λ::Float64 = .1, n_steps::Int = 100)   # Could make a Sheaf wrapper for Vector{SheafNode} for cleanliness
+    for _ in 1:n_steps
+        for v::SheafNode in sheaf
+            x_update = zeros(length(v.x))
+            z_update = zeros(length(v.z))
+            for u in keys(v.adj)
+                # Get F
+                x_update +=  -ForwardDiff.gradient(v.f, v.x) -2 * v.adj[u]' * (v.adj[u] * v.x - u.adj[v] * u.x) - v.adj[u]' * (v.adj[u] * v.z - u.adj[v] * u.z)
+                z_update += v.adj[u]' * (v.adj[u] * v.x - u.adj[v] * u.x)
+            end
+            v.x += x_update * λ
+            v.z += z_update * λ
+        end
+    end
+end
+
+function simulate_distributed!(sheaf::Vector{SheafNode}, λ::Float64 = .1, n_steps::Int = 100)   # Could eliminate the sheaf node part. Also, should we alternate x and z updates?
+    for _ in 1:n_steps
+        @sync @distributed for v::SheafNode in sheaf
+            x_update = zeros(length(v.x))
+            z_update = zeros(length(v.z))
+            for u in keys(v.adj)
+                # Get F
+                x_update +=  -ForwardDiff.gradient(v.f, v.x) -2 * v.adj[u]' * (v.adj[u] * v.x - u.adj[v] * u.x) - v.adj[u]' * (v.adj[u] * v.z - u.adj[v] * u.z)
+                z_update += v.adj[u]' * (v.adj[u] * v.x - u.adj[v] * u.x)
+            end
+            v.x += x_update * λ
+            v.z += z_update * λ
+        end
+    end
+end
+
+
 
 end      # module

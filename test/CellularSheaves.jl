@@ -103,3 +103,20 @@ simulate!(sheaf_objective_5)
 
 @test sheaf_objective_5.x ≈ [1.0, 1.0] atol=1e-2
 sheaf_objective_5.z
+
+
+# SheafNode basics
+# Similar test problem to the previous test case using SheafObjectives
+
+sheaf_node_1 = SheafNode( x -> (x[2])^2, [1, 3], [2, 4])
+sheaf_node_2 = SheafNode(x -> (x[1] - 2)^2, [22, 7], [8, 6])
+add_edge!(sheaf_node_1, sheaf_node_2, [0 1;], [1 0;])
+
+
+distributed_sheaf_2 = [sheaf_node_1, sheaf_node_2]
+
+simulate_distributed!(distributed_sheaf_2)
+simulate!(distributed_sheaf_2)
+
+@test distributed_sheaf_2[1].x[2] ≈ 1  atol=1e-5
+@test distributed_sheaf_2[2].x[1] ≈ 1  atol=1e-5
