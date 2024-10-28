@@ -1,6 +1,7 @@
 module CellularSheaves
 
-export CellularSheaf, add_map!, coboundary_map, laplacian, is_global_section, SheafObjective, apply_f, apply_f_with_stabilizer, apply_lagrangian_to_x, apply_lagrangian_to_z, simulate!
+export CellularSheaf, add_map!, coboundary_map, laplacian, is_global_section, SheafObjective, apply_f, apply_f_with_stabilizer, apply_lagrangian_to_x, apply_lagrangian_to_z, simulate!,
+    SheafNode, add_edge!, simulate_distributed!, simulate_distributed_separate_steps!, SheafVertex, SheafEdge, xLaplacian, zLaplacian
 
 using BlockArrays
 using ForwardDiff
@@ -28,7 +29,7 @@ function CellularSheaf(num_V::Int, num_E::Int, max_dimension::Int)
     return CellularSheaf(V, E)
 end
 
-function add_map!(s::CellularSheaf, v::Int, e::Int, map::Matrix{Float64})
+function add_map!(s::CellularSheaf, v::Int, e::Int, map::Matrix{})
     s.restriction_maps[Block(e, v)] = map
 end
 
@@ -102,24 +103,18 @@ function simulate!(so::SheafObjective, λ::Float64 = .1, n_steps::Int = 100)  # 
 end
 
 
-# mutable struct SheafNode
-#     adj::Vector{Int}    # Indices of neighboring SheafNodes
-#     maps::Vector{Array}   # maps[i] corresponds to the resrtiction map from the SheafNode to the edge connecting it to adj[i]
-#     f::Function    # Objective function at vertex
-#     x::Vector  # Primary variables
-#     z::Vector  # Dual variables
-# end
-
-
+# First distriubted implementation: maps from neighboring SheafNodes to the restriction maps into the shared edges
 mutable struct SheafNode
-    adj::Dict{SheafNode, Array}
+    adj::Dict{SheafNode, Array}  # v   ---- e  ------ w   is stored as   {w -> (v -> e)}
     f::Function    # Objective function at vertex
     x::Vector  # Primary variables
     z::Vector  # Dual variables
+    x_update::Vector
+    z_update::Vector
 end
 
 function SheafNode(f::Function, x::Vector, z::Vector)
-    return SheafNode(Dict(), f, x, z)
+    return SheafNode(Dict(), f, x, z, x, z)
 end
 
 function add_edge!(u::SheafNode, v::SheafNode, u_map::Array, v_map::Array)
@@ -128,38 +123,146 @@ function add_edge!(u::SheafNode, v::SheafNode, u_map::Array, v_map::Array)
 end
 
 
-function simulate!(sheaf::Vector{SheafNode}, λ::Float64 = .1, n_steps::Int = 100)   # Could make a Sheaf wrapper for Vector{SheafNode} for cleanliness
+# Uses the distributed sheaf structure to do Uzawa's algorithm, but executes sequentially (not distributed)
+function simulate!(sheaf::Vector{SheafNode}, λ::Float64 = .1, n_steps::Int = 10) 
     for _ in 1:n_steps
-        for v::SheafNode in sheaf
+        for i in 1:length(sheaf)
+            v = sheaf[i]
             x_update = zeros(length(v.x))
             z_update = zeros(length(v.z))
+
+            # Compute updates
+            x_update +=  -ForwardDiff.gradient(v.f, v.x)
             for u in keys(v.adj)
-                # Get F
-                x_update +=  -ForwardDiff.gradient(v.f, v.x) -2 * v.adj[u]' * (v.adj[u] * v.x - u.adj[v] * u.x) - v.adj[u]' * (v.adj[u] * v.z - u.adj[v] * u.z)
+                x_update += -2 * v.adj[u]' * (v.adj[u] * v.x - u.adj[v] * u.x) - v.adj[u]' * (v.adj[u] * v.z - u.adj[v] * u.z)
                 z_update += v.adj[u]' * (v.adj[u] * v.x - u.adj[v] * u.x)
             end
+
+            # Apply updates
             v.x += x_update * λ
             v.z += z_update * λ
         end
     end
 end
 
-function simulate_distributed!(sheaf::Vector{SheafNode}, λ::Float64 = .1, n_steps::Int = 100)   # Could eliminate the sheaf node part. Also, should we alternate x and z updates?
+
+# Same as above but uses @distributed to actually execute in a distributed way
+function simulate_distributed!(sheaf::Vector{SheafNode}, λ::Float64 = .1, n_steps::Int = 10)   
     for _ in 1:n_steps
-        @sync @distributed for v::SheafNode in sheaf
+        @sync @distributed for i in 1:length(sheaf) 
+            v = sheaf[i]
             x_update = zeros(length(v.x))
             z_update = zeros(length(v.z))
+
+            # Compute updates
+            x_update +=  -ForwardDiff.gradient(v.f, v.x)
             for u in keys(v.adj)
-                # Get F
-                x_update +=  -ForwardDiff.gradient(v.f, v.x) -2 * v.adj[u]' * (v.adj[u] * v.x - u.adj[v] * u.x) - v.adj[u]' * (v.adj[u] * v.z - u.adj[v] * u.z)
+                x_update += -2 * v.adj[u]' * (v.adj[u] * v.x - u.adj[v] * u.x) - v.adj[u]' * (v.adj[u] * v.z - u.adj[v] * u.z)
                 z_update += v.adj[u]' * (v.adj[u] * v.x - u.adj[v] * u.x)
             end
+
+            # Apply updates
             v.x += x_update * λ
             v.z += z_update * λ
         end
     end
 end
 
+
+# Same Uzawa's algorithm, except computing and applying updates are separated into different steps. More suited to the literature.
+function simulate_distributed_separate_steps!(sheaf::Vector{SheafNode}, λ::Float64 = .1, n_steps::Int = 10) 
+    for _ in 1:n_steps
+        # Phase 1: Compute updates
+        @sync @distributed for i in 1:length(sheaf)   # Separate read/compute and write steps? Might be helpful...     
+            v = sheaf[i]
+            v.x_update = zeros(length(v.x))
+            v.z_update = zeros(length(v.z))
+
+            # Compute updates
+            v.x_update +=  -ForwardDiff.gradient(v.f, v.x)
+            for u in keys(v.adj)
+                v.x_update += -2 * v.adj[u]' * (v.adj[u] * v.x - u.adj[v] * u.x) - v.adj[u]' * (v.adj[u] * v.z - u.adj[v] * u.z)
+                v.z_update += v.adj[u]' * (v.adj[u] * v.x - u.adj[v] * u.x)
+            end
+        end
+
+        # Phase 2: Apply updates
+        @sync @distributed for v in sheaf 
+                # Apply updates
+                v.x += v.x_update * λ
+                v.z += v.z_update * λ
+        end
+    end
+end
+
+
+
+# Dr. Fairbanks' approach: Separate vertex and edge workers
+
+mutable struct SheafVertex
+    adj::Vector{}  # It's actually a Vector{SheafEdge} but this was causing a circular dependency problem. Use Vector{Int} instead?
+    f::Function    # Objective function at vertex
+    x::Vector  # Primary variables
+    z::Vector  # Dual variables
+
+    # x_update::Vector   # This would be if we wanted to separate the compute and update steps, as above
+    # z_update::Vector
+end
+
+struct SheafEdge    # Note-- not mutable!
+    src::SheafVertex         # How to separate out src, target? Also, should src be an actual sheafnode, not just an int?
+    tgt::SheafVertex
+    left::Array
+    right::Array
+end
+
+function SheafVertex(f::Function, x::Vector, z::Vector)
+    return SheafVertex([], f, x, z)
+end
+
+function add_edge!(u::SheafVertex, v::SheafVertex, u_map::Array, v_map::Array)
+    edge = SheafEdge(u, v, u_map, v_map)
+    push!(u.adj, edge)
+    push!(v.adj, edge)
+end
+
+# "Asks the shared edge" to calculate the local update to the primal x variable
+function xLaplacian(v::SheafVertex, e::SheafEdge)
+    if v == e.src
+        return -2 * e.left' * (e.left * e.src.x - e.right * e.tgt.x) - e.left' * (e.left * e.src.z - e.right * e.tgt.z)
+    else
+        return 2 * e.right' * (e.left * e.src.x - e.right * e.tgt.x) + e.right' * (e.left * e.src.z - e.right * e.tgt.z)
+    end
+end
+
+# "Asks the shared edge" to calculate the local update to the dual z variable
+function zLaplacian(v::SheafVertex, e::SheafEdge)
+    if v == e.src
+        return e.left' * (e.left * e.src.x - e.right * e.tgt.x)
+    else
+        return -1 * e.right' * (e.left * e.src.x - e.right * e.tgt.x)
+    end
+end
+
+# This newer implementation with the separate vertex and edge workers makes the simulate method cleaner
+function simulate_distributed!(sheaf::Vector{SheafVertex}, λ::Float64 = .1, n_steps::Int = 10)  
+    for _ in 1:n_steps
+        @sync @distributed for i in 1:length(sheaf)  
+            v = sheaf[i]
+            x_update = zeros(length(v.x))
+            z_update = zeros(length(v.z))
+
+            # Compute updates
+            x_update +=  -ForwardDiff.gradient(v.f, v.x)
+            for e in v.adj
+                x_update += xLaplacian(v, e)
+                z_update += zLaplacian(v, e)
+            end
+            v.x += x_update * λ
+            v.z += z_update * λ
+        end
+    end
+end
 
 
 end      # module
