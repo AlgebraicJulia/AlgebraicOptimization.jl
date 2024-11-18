@@ -1,7 +1,7 @@
 module CellularSheaves
 
 export CellularSheaf, add_map!, coboundary_map, laplacian, is_global_section, SheafObjective, apply_f, apply_f_with_stabilizer, apply_lagrangian_to_x, apply_lagrangian_to_z, simulate!,
-    SheafNode, add_edge!, simulate_distributed!, simulate_distributed_separate_steps!, SheafVertex, SheafEdge, xLaplacian, zLaplacian
+    SheafNode, add_edge!, simulate_distributed!, simulate_distributed_separate_steps!, SheafVertex, SheafEdge, xLaplacian, zLaplacian, ThreadedSheaf
 
 using BlockArrays
 using ForwardDiff
@@ -9,8 +9,8 @@ using Distributed
 
 
 struct CellularSheaf
-    V::Vector{Int}    # Number of vertices
-    E::Vector{Int}    # Number of edges
+    V::Vector{Int}    # Vertex dimensions
+    E::Vector{Int}    # Edge dimensions
     # N::Vector{Int}    # Max dimension of any stalk
     restriction_maps::BlockArray    # E*N x V*N matrix. Viewed as a block matrix with N*N blocks, the (e, v) entry represents the restriction map from v -> e.
 end
@@ -61,7 +61,7 @@ end
 
 
 mutable struct SheafObjective
-    objectives::Vector{Function}    # Number of vertices
+    objectives::Vector{Function}    # List of objective functions at each vertex
     s::CellularSheaf    # E*N x V*N matrix. Viewed as a block matrix with N*N blocks, the (e, v) entry represents the restriction map from v -> e.
     x::Vector   # Primary variables
     z::Vector   # Dual variables
@@ -175,8 +175,8 @@ function simulate_distributed_separate_steps!(sheaf::Vector{SheafNode}, λ::Floa
         # Phase 1: Compute updates
         @sync @distributed for i in 1:length(sheaf)   # Separate read/compute and write steps? Might be helpful...     
             v = sheaf[i]
-            v.x_update = zeros(length(v.x))
-            v.z_update = zeros(length(v.z))
+            v.x_update .= 0  # Fill with zeros
+            v.z_update .- 0  # Fill with zeros
 
             # Compute updates
             v.x_update +=  -ForwardDiff.gradient(v.f, v.x)
@@ -204,7 +204,8 @@ mutable struct SheafVertex
     f::Function    # Objective function at vertex
     x::Vector  # Primary variables
     z::Vector  # Dual variables
-
+    x_update::Vector
+    z_update::Vector
     # x_update::Vector   # This would be if we wanted to separate the compute and update steps, as above
     # z_update::Vector
 end
@@ -217,7 +218,7 @@ struct SheafEdge    # Note-- not mutable!
 end
 
 function SheafVertex(f::Function, x::Vector, z::Vector)
-    return SheafVertex([], f, x, z)
+    return SheafVertex([], f, x, z, zeros(length(x)), zeros(length(z)))
 end
 
 function add_edge!(u::SheafVertex, v::SheafVertex, u_map::Array, v_map::Array)
@@ -247,20 +248,108 @@ end
 # This newer implementation with the separate vertex and edge workers makes the simulate method cleaner
 function simulate_distributed!(sheaf::Vector{SheafVertex}, λ::Float64 = .1, n_steps::Int = 10)  
     for _ in 1:n_steps
-        @sync @distributed for i in 1:length(sheaf)  
+        @sync @distributed for i in 1:length(sheaf)  # Does this actually work, or are different processes getting different information?
             v = sheaf[i]
-            x_update = zeros(length(v.x))
-            z_update = zeros(length(v.z))
+            v.x_update .= 0   # Fill with zeros to reset update
+            v.z_update .= 0   # Fill with zeros to reset update
 
             # Compute updates
-            x_update +=  -ForwardDiff.gradient(v.f, v.x)
+            v.x_update +=  -ForwardDiff.gradient(v.f, v.x)
             for e in v.adj
-                x_update += xLaplacian(v, e)
-                z_update += zLaplacian(v, e)
+                v.x_update += xLaplacian(v, e)
+                v.z_update += zLaplacian(v, e)
             end
-            v.x += x_update * λ
-            v.z += z_update * λ
+            v.x += v.x_update * λ
+            v.z += v.z_update * λ
         end
+    end
+end
+
+
+
+
+
+
+
+
+
+
+# New approach: Threading & shared memory
+# Should be very straightforward
+
+mutable struct ThreadedSheaf
+    x::BlockArray{Float64} 
+    λ::BlockArray{Float64}
+    f::Vector{Function}
+    restriction_maps::BlockArray{Float64}  # Could be a sparse array
+end
+
+
+
+
+# Constructor: no coboundary map given
+function ThreadedSheaf(V::Vector{Int}, E::Vector{Int}, f::Union{Vector{Function}, Nothing} = nothing)
+    f = f === nothing ? Function[] : f  # Set `f` to an empty vector if `nothing` was provided
+    x = BlockArray{Float64}(zeros(sum(V), 1), V, [1])
+    λ = BlockArray{Float64}(zeros(sum(V), 1), V, [1])
+    restriction_maps = BlockArray{Float64}(zeros(sum(E), sum(V)), E, V)
+    return ThreadedSheaf(x, λ, f, restriction_maps)
+end
+
+
+
+
+
+# # Constructor: no coboundary map given, constant dimension
+# function CellularSheaf(num_V::Int, num_E::Int, max_dimension::Int)
+#     V = fill(max_dimension, num_V)  # E blocks of N rows each
+#     E = fill(max_dimension, num_E)  # V blocks of N columns each
+#     return CellularSheaf(V, E)
+# end
+
+
+function add_map!(s::ThreadedSheaf, v::Int, e::Int, map::Matrix{})
+    s.restriction_maps[Block(e, v)] = map
+end
+
+function coboundary_map(s::ThreadedSheaf)
+    # Iterate through the restriction_maps matrix and negate the second non-zero block in each row
+    coboundary = copy(s.restriction_maps)
+    for e in 1:blocksize(coboundary)[1]   # Iterate the block rows
+        has_seen_block = false
+        for v in 1:blocksize(coboundary)[2]
+            if !has_seen_block && !(iszero(coboundary[Block(e, v)]))
+                has_seen_block = true
+            elseif has_seen_block && !(iszero(coboundary[Block(e, v)]))
+                coboundary[Block(e, v)] = -1 * coboundary[Block(e, v)]
+                break
+            end
+        end
+    end
+    return coboundary
+end
+
+
+function laplacian(s::ThreadedSheaf)
+    return coboundary_map(s)' * coboundary_map(s)
+end
+
+function is_global_section(s::ThreadedSheaf, v::Vector)
+    return iszero(laplacian(s) * v)      # This may only work if the graph underlying s is connected
+end
+
+
+function simulate!(s::ThreadedSheaf, α::Float64 = .1, n_steps::Int = 1000)  # Uzawa's algorithm. Currently not very distributed.
+    L = laplacian(s)
+    for _ in 1:n_steps
+        # Gradient update step
+        Threads.@threads for v in 1:blocksize(s.x)[1]   # Iterate the vertices. This will be @threads.
+            s.x[Block(v, 1)] += -ForwardDiff.gradient(s.f[v], s.x[Block(v, 1)]) * α
+        end
+
+        # Laplacian multiply step
+        s.x +=  α * (-2 * L * s.x - L * s.λ)
+        s.λ += α * L * s.x
     end
 end
 
