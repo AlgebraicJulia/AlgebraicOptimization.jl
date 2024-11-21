@@ -45,6 +45,14 @@ function universal_pushout(
     universal_pullback(A', B', C', D')
 end
 
+function product(n::Int, m::Int)
+    p1 = [I(n) zeros(n,m)]
+    p2 = [zeros(m,n) I(m)]
+    return p1,p2
+end
+
+pair(A::AbstractMatrix, B::AbstractMatrix) = [A; B]
+
 
 # Tests
 
@@ -67,13 +75,43 @@ struct OpenObjective # X -> Y
     obj::Function # V -> R
     A::AbstractMatrix # V -> X
     B::AbstractMatrix # V -> Y
+    # TODO: Add test that dom(A) == dom(B)
 end
+
+(f::OpenObjective)(x) = f.obj(x)
+dom(f::OpenObjective) = size(f.A, 1)
+codom(f::OpenObjective) = size(f.B, 1)
+apex(f::OpenObjective) = size(f.A, 2)
 
 function compose(f::OpenObjective, g::OpenObjective)
     C,D = pullback(f.B, g.A)
-    ϕ = [C;D]
-    
+    ϕ = pair(C,D)
 
+    X = apex(f)
+    Y = apex(g)
+    p1, p2 = product(X,Y)
+
+    comp_obj(x) = f.obj(p1*ϕ*x) + g.obj(p2*ϕ*x)
+    return OpenObjective(comp_obj, f.A*C, g.B*D)
 end
+
+Q = rand(4,4)
+Q = Q'*Q
+
+R = rand(5,5)
+R = R'*R
+
+A1 = rand(3,4)
+B1 = rand(2,4)
+
+A2 = rand(2,5)
+B2 = rand(3, 5)
+
+f = OpenObjective(x -> x'*Q*x, A1, B1)
+g = OpenObjective(x -> x'*R*x, A2, B2)
+
+gf = compose(f, g)
+
+
 
 
