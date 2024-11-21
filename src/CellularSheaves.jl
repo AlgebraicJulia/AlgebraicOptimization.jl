@@ -1,7 +1,8 @@
 module CellularSheaves
 
 export CellularSheaf, add_map!, coboundary_map, laplacian, is_global_section, SheafObjective, apply_f, apply_f_with_stabilizer, apply_lagrangian_to_x, apply_lagrangian_to_z, simulate!,
-    SheafNode, add_edge!, simulate_distributed!, simulate_distributed_separate_steps!, SheafVertex, SheafEdge, xLaplacian, zLaplacian, ThreadedSheaf
+    SheafNode, add_edge!, simulate_distributed!, simulate_distributed_separate_steps!, SheafVertex, SheafEdge, xLaplacian, zLaplacian, ThreadedSheaf, optimize!,
+    OptimizationAlgorithm
 
 using BlockArrays
 using ForwardDiff
@@ -32,6 +33,8 @@ end
 function add_map!(s::CellularSheaf, v::Int, e::Int, map::Matrix{})
     s.restriction_maps[Block(e, v)] = map
 end
+
+# TODO: make a better API for adding edges based on pairs of vertices and maps.
 
 function coboundary_map(s::CellularSheaf)
     # Iterate through the restriction_maps matrix and negate the second non-zero block in each row
@@ -351,6 +354,21 @@ function simulate!(s::ThreadedSheaf, α::Float64 = .1, n_steps::Int = 1000)  # U
         s.x +=  α * (-2 * L * s.x - L * s.λ)
         s.λ += α * L * s.x
     end
+end
+
+# Unified interface to optimize sheaf objectives using different algorithmic backends
+
+abstract type OptimizationAlgorithm end
+
+struct Uzawas <: OptimizationAlgorithm 
+    step_size::Float64
+    max_iters::Float64
+    epsilon::Float64 # Terminate if objective value decreases by less than epsilon in a given iteration
+end
+
+function optimize!(s::SheafObjective, alg::Uzawas)
+    simulate!(s, alg.step_size, alg.max_iters)
+    # TODO: implement convergence test.
 end
 
 
