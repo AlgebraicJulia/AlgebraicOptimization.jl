@@ -1,7 +1,7 @@
 module CellularSheaves
 
 export CellularSheaf, add_map!, coboundary_map, laplacian, is_global_section, SheafObjective, apply_f, apply_f_with_stabilizer, apply_lagrangian_to_x, apply_lagrangian_to_z, simulate!,
-    SheafNode, add_edge!, simulate_distributed!, simulate_distributed_separate_steps!, SheafVertex, SheafEdge, xLaplacian, zLaplacian, ThreadedSheaf
+    SheafNode, add_edge!, simulate_distributed!, simulate_distributed_separate_steps!, SheafVertex, SheafEdge, xLaplacian, zLaplacian, ThreadedSheaf, simulate_sequential!
 
 using BlockArrays
 using ForwardDiff
@@ -334,12 +334,26 @@ function laplacian(s::ThreadedSheaf)
     return coboundary_map(s)' * coboundary_map(s)
 end
 
-function is_global_section(s::ThreadedSheaf, v::Vector)
+function is_global_section(s::ThreadedSheaf, v::Vector)   # This should now just be based off of the threaded sheaf, since it includes the info
     return iszero(laplacian(s) * v)      # This may only work if the graph underlying s is connected
 end
 
 
 function simulate!(s::ThreadedSheaf, α::Float64 = .1, n_steps::Int = 1000)  # Uzawa's algorithm. Currently not very distributed.
+    L = laplacian(s)
+    for _ in 1:n_steps
+        # Gradient update step
+        Threads.@threads for v in 1:blocksize(s.x)[1]   # Iterate the vertices. This will be @threads.
+            s.x[Block(v, 1)] += -ForwardDiff.gradient(s.f[v], s.x[Block(v, 1)]) * α
+        end
+
+        # Laplacian multiply step
+        s.x +=  α * (-2 * L * s.x - L * s.λ)
+        s.λ += α * L * s.x
+    end
+end
+
+function simulate_sequential!(s::ThreadedSheaf, α::Float64 = .1, n_steps::Int = 1000)  # Uzawa's algorithm. Currently not very distributed.
     L = laplacian(s)
     for _ in 1:n_steps
         # Gradient update step

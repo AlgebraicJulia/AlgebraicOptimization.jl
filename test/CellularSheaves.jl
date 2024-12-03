@@ -190,25 +190,51 @@ simulate!(sheaf_2)
 @test sheaf_2.x ≈ [0; 1; 2; 1]  atol=1e-3  
 
 
+# Benchmark
+
+sheaf_2 = ThreadedSheaf([2, 2], [1])
+add_map!(sheaf_2, 1, 1, [0 1])
+add_map!(sheaf_2, 2, 1, [0 1]) 
+
+sheaf_2.f = [x -> x[1]^2 + x[2]^2, x -> (x[1] - 2)^2 + (x[2] -2)^2]
+simulate_sequential!(sheaf_2)
+
+@test sheaf_2.x ≈ [0; 1; 2; 1]  atol=1e-3  
 
 
-# Next steps: 10/28/24
 
-# Add more test cases for the newer approach with separate vertices and edges
 
-# Ask in lab meeting for how to make it more distributed (MPI, partitioning/clustering, etc.)
+dim = 1000
 
-# Test on a big enough problem so that @distributed actually has speedup
+big_sheaf = ThreadedSheaf([dim, dim], [dim])
+add_map!(big_sheaf, 1, 1, rand(dim, dim))
+add_map!(big_sheaf, 2, 1, rand(dim, dim))
+big_sheaf.f = [x -> (sum(x) - 1)^2, x -> sum(x)^2]
+simulate!(big_sheaf)
 
-# Random quadratic forms on all the vertices
-# Random graph with some specific properties?
 
-# Do we need the ability to read in a graph?
-# Random positive definite matrix (P^T P)
 
-# x^T Q x + b^T x        <--- objective functions         # + c
-# Restriction maps: arbitrary full rank square matrices    <---- no consensus at all?   (not true--there's always 0)
-# Line graph, mpc example?  (too simple)
 
-# Identities (constant sheaf) is always a good baseline.
-# 0/1 projection matrices.
+
+# Goals: 
+    # Goal: build a much bigger test case
+    # Other goal: figure out which of the major phases takes longer
+
+# Graph ideas:
+    # Random graph with some specific properties?
+    # Do we need the ability to read in a graph?
+    # Line graph, mpc example?  (too simple)
+
+
+
+# Objectives ideas:
+    # x^T Q x + b^T x        <--- objective functions         # + c
+    # Random quadratic forms on all the vertices
+
+
+
+# Restriction map ideas: 
+    # Restriction maps: arbitrary full rank square matrices    <---- no consensus at all?   (not true--there's always 0)
+    # Identities (constant sheaf) is always a good baseline.
+    # 0/1 projection matrices.
+    # Random positive definite matrix (P^T P)
