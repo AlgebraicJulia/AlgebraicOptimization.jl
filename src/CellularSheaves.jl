@@ -281,7 +281,7 @@ mutable struct ThreadedSheaf
     x::BlockArray{Float64} 
     λ::BlockArray{Float64}
     f::Vector{Function}
-    restriction_maps::BlockArray{Float64}  # Could be a sparse array
+    restriction_maps::BlockArray{Float64}  # Could be a sparse array. This is an e * v matrix.
 end
 
 
@@ -290,7 +290,7 @@ end
 # Constructor: no coboundary map given
 function ThreadedSheaf(V::Vector{Int}, E::Vector{Int}, f::Union{Vector{Function}, Nothing} = nothing)
     f = f === nothing ? Function[] : f  # Set `f` to an empty vector if `nothing` was provided
-    x = BlockArray{Float64}(zeros(sum(V), 1), V, [1])
+    x = BlockArray{Float64}(ones(sum(V), 1), V, [1])
     λ = BlockArray{Float64}(zeros(sum(V), 1), V, [1])
     restriction_maps = BlockArray{Float64}(zeros(sum(E), sum(V)), E, V)
     return ThreadedSheaf(x, λ, f, restriction_maps)
@@ -334,8 +334,8 @@ function laplacian(s::ThreadedSheaf)
     return coboundary_map(s)' * coboundary_map(s)
 end
 
-function is_global_section(s::ThreadedSheaf, v::Vector)   # This should now just be based off of the threaded sheaf, since it includes the info
-    return iszero(laplacian(s) * v)      # This may only work if the graph underlying s is connected
+function is_global_section(s::ThreadedSheaf)   # This should now just be based off of the threaded sheaf, since it includes the info
+    return iszero(laplacian(s) * s.x)      # This may only work if the graph underlying s is connected
 end
 
 
@@ -357,7 +357,7 @@ function simulate_sequential!(s::ThreadedSheaf, α::Float64 = .1, n_steps::Int =
     L = laplacian(s)
     for _ in 1:n_steps
         # Gradient update step
-        Threads.@threads for v in 1:blocksize(s.x)[1]   # Iterate the vertices. This will be @threads.
+        for v in 1:blocksize(s.x)[1]   # Iterate the vertices. No @threads here.
             s.x[Block(v, 1)] += -ForwardDiff.gradient(s.f[v], s.x[Block(v, 1)]) * α
         end
 

@@ -178,42 +178,104 @@ simulate_distributed!(distributed_sheaf_4, .1, 100)
 
 
 
+
+
+
+
+
 # New test cases: ThreadedSheafs, shared memory
 
+# Basic sheaf with 2 nodes and 1 edge
+
 sheaf_2 = ThreadedSheaf([2, 2], [1])
+
 add_map!(sheaf_2, 1, 1, [0 1])
 add_map!(sheaf_2, 2, 1, [0 1]) 
-
 sheaf_2.f = [x -> x[1]^2 + x[2]^2, x -> (x[1] - 2)^2 + (x[2] -2)^2]
+
+sheaf_2_sequential = deepcopy(sheaf_2)
 simulate!(sheaf_2)
+simulate_sequential!(sheaf_2_sequential)
 
 @test sheaf_2.x ≈ [0; 1; 2; 1]  atol=1e-3  
-
-
-# Benchmark
-
-sheaf_2 = ThreadedSheaf([2, 2], [1])
-add_map!(sheaf_2, 1, 1, [0 1])
-add_map!(sheaf_2, 2, 1, [0 1]) 
-
-sheaf_2.f = [x -> x[1]^2 + x[2]^2, x -> (x[1] - 2)^2 + (x[2] -2)^2]
-simulate_sequential!(sheaf_2)
-
 @test sheaf_2.x ≈ [0; 1; 2; 1]  atol=1e-3  
 
 
 
 
-dim = 1000
+# Threaded version: 2 nodes, 1 edge, large dimension on each node
+dim = 100
 
 big_sheaf = ThreadedSheaf([dim, dim], [dim])
 add_map!(big_sheaf, 1, 1, rand(dim, dim))
 add_map!(big_sheaf, 2, 1, rand(dim, dim))
-big_sheaf.f = [x -> (sum(x) - 1)^2, x -> sum(x)^2]
-simulate!(big_sheaf)
+
+
+Q = rand(dim, dim)
+big_sheaf.f = [let Q = rand(dim, dim)  
+                  x -> only(x' * Q * x)  
+              end for _ in 1:2]
+
+
+simulate!(big_sheaf, 1e-4, 10000)   # Add on checks that big_sheaf has all the right dimensions, etc?   -4 seems to be a sweet spot...
+big_sheaf.x
+big_sheaf.λ
+
+is_global_section(big_sheaf)   # Right now, this is returning false. Why?
 
 
 
+# Big sheaf 2: V many vertices, E many edges
+# For simplicity of constructing, we're going to allow parallel edges
+
+V = 10
+E = 3
+dim = 200
+
+big_sheaf_2 = ThreadedSheaf([dim for _ in 1:V], [dim for _ in 1:E])  # Could we speed this up?
+
+# Add random restriction maps
+for e in 1:E
+    V = 10  # Example value
+    u = rand(1:V)
+    w = rand(1:V)
+    while w == u
+        w = rand(1:V)  # Keep generating until b is different from a
+    end
+    add_map!(big_sheaf_2, u, e, rand(dim, dim))
+    add_map!(big_sheaf_2, w, e, rand(dim, dim))
+end
+
+# Add random objective functions
+big_sheaf_2.f = [let Q = rand(dim, dim), b = rand(1, dim) 
+                     x -> only(x' * Q * x + b * x) 
+                 end for _ in 1:V]
+
+big_sheaf_2_sequential = deepcopy(big_sheaf_2)
+
+
+simulate!(big_sheaf_2, 1e-4, 10000)   # Add on checks that big_sheaf has all the right dimensions, etc?   -4 seems to be a sweet spot...
+simulate_sequential!(big_sheaf_2_sequential, 1e-4, 10000)
+
+@test iszero(big_sheaf_2.x - big_sheaf_2_sequential.x)
+@test iszero(big_sheaf_2.λ - big_sheaf_2_sequential.λ)
+
+
+is_global_section(big_sheaf_2)
+
+
+
+
+
+
+
+
+
+
+
+# So we're getting NaN... but it's a start!
+
+# Iterate edges, randomly assign to vertices
 
 
 # Goals: 
