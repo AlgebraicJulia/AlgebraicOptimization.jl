@@ -2,27 +2,30 @@ using AlgebraicOptimization
 using Test
 using BenchmarkTools
 using LinearAlgebra
+using Random
+
+Random.seed!(3)
 
 
-println("Number of threads: ", Threads.nthreads())   # 20 on Sam's laptop
-# BLAS.set_num_threads(1)   # Why did this slow me down?
+# println("Number of threads: ", Threads.nthreads())   # 20 on Sam's laptop
+BLAS.set_num_threads(20)   # Why did this slow me down?
 
 
-# ThreadedSheaf, sequential version (should be slower, hopefully)
+# # ThreadedSheaf, sequential version (should be slower, hopefully)
 
-sheaf_2 = ThreadedSheaf([2, 2], [1])
+# sheaf_2 = ThreadedSheaf([2, 2], [1])
 
-add_map!(sheaf_2, 1, 1, [0 1])
-add_map!(sheaf_2, 2, 1, [0 1]) 
-sheaf_2.f = [x -> x[1]^2 + x[2]^2, x -> (x[1] - 2)^2 + (x[2] -2)^2]
+# add_map!(sheaf_2, 1, 1, [0 1])
+# add_map!(sheaf_2, 2, 1, [0 1]) 
+# sheaf_2.f = [x -> x[1]^2 + x[2]^2, x -> (x[1] - 2)^2 + (x[2] -2)^2]
 
-sheaf_2_sequential = deepcopy(sheaf_2)
+# sheaf_2_sequential = deepcopy(sheaf_2)
 
-println("sheaf_2 parallel version:")
-@btime simulate!(sheaf_2)   # Would @time be better since this method modifies? Maybe we want a version that doesn't modify for benchmarking purposes?
+# println("sheaf_2 parallel version:")
+# @btime simulate!(sheaf_2)   # Would @time be better since this method modifies? Maybe we want a version that doesn't modify for benchmarking purposes?
 
-println("sheaf_2 sequential version:")
-@btime simulate_sequential!(sheaf_2_sequential)
+# println("sheaf_2 sequential version:")
+# @btime simulate_sequential!(sheaf_2_sequential)
 
 
 
@@ -30,8 +33,8 @@ println("sheaf_2 sequential version:")
 # For simplicity of constructing, we're going to allow parallel edges
 
 V = 10
-E = 3
-dim = 2
+E = 10
+dim = 300
 
 big_sheaf_2 = ThreadedSheaf([dim for _ in 1:V], [dim for _ in 1:E])  # Could we speed this up?
 
@@ -55,18 +58,27 @@ big_sheaf_2.f = [let Q = rand(dim, dim), b = rand(1, dim)
 big_sheaf_2_sequential = deepcopy(big_sheaf_2)
 
 
-println("big_sheaf_2 parallel version:")
-@time simulate!(big_sheaf_2, 1e-4, 10000)   # Add on checks that big_sheaf has all the right dimensions, etc?   -4 seems to be a sweet spot...
+
+simulate_sequential!(big_sheaf_2_sequential, 1e-4, 1)
+simulate!(big_sheaf_2, 1e-4, 1)
+
 
 println("big_sheaf_2 sequential version:")
-@time simulate_sequential!(big_sheaf_2_sequential, 1e-4, 10000)
+@time simulate_sequential!(big_sheaf_2_sequential, 1e-4, 5)
+
+println("big_sheaf_2 parallel version:")
+@time simulate!(big_sheaf_2, 1e-4, 5)   # Add on checks that big_sheaf has all the right dimensions, etc?   -4 seems to be a sweet spot...
 
 
 
 
 
+#  Run command:   julia --threads=auto --project=. C:\Users\samco\OneDrive\Desktop\AlgOptOfficial\AlgebraicOptimization.jl\test\CellularSheavesBenchmark.jl
 
 
+# Why is @threads slower? Can we make it faster?
+# How to well condition the problem so we reach a solution?
+# Incorporate Octavian to speed up the matrix multiply
 
 
 

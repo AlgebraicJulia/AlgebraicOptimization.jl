@@ -5,6 +5,7 @@ export CellularSheaf, add_map!, coboundary_map, laplacian, is_global_section, Sh
 
 using BlockArrays
 using ForwardDiff
+using ReverseDiff
 using Distributed
 
 
@@ -344,7 +345,7 @@ function simulate!(s::ThreadedSheaf, α::Float64 = .1, n_steps::Int = 1000)  # U
     for _ in 1:n_steps
         # Gradient update step
         Threads.@threads for v in 1:blocksize(s.x)[1]   # Iterate the vertices. This will be @threads.
-            s.x[Block(v, 1)] += -ForwardDiff.gradient(s.f[v], s.x[Block(v, 1)]) * α
+            s.x[Block(v, 1)] += -ReverseDiff.gradient(s.f[v], s.x[Block(v, 1)]) * α
         end
 
         # Laplacian multiply step
@@ -354,14 +355,16 @@ function simulate!(s::ThreadedSheaf, α::Float64 = .1, n_steps::Int = 1000)  # U
 end
 
 function simulate_sequential!(s::ThreadedSheaf, α::Float64 = .1, n_steps::Int = 1000)  # Uzawa's algorithm. Currently not very distributed.
-    L = laplacian(s)
+    L = laplacian(s)    # Make this a sparse matrix
     for _ in 1:n_steps
         # Gradient update step
+        # println("Gradient update step:")
         for v in 1:blocksize(s.x)[1]   # Iterate the vertices. No @threads here.
-            s.x[Block(v, 1)] += -ForwardDiff.gradient(s.f[v], s.x[Block(v, 1)]) * α
+            s.x[Block(v, 1)] += -ReverseDiff.gradient(s.f[v], s.x[Block(v, 1)]) * α
         end
 
         # Laplacian multiply step
+        # println("Laplacian multiply step:")
         s.x +=  α * (-2 * L * s.x - L * s.λ)
         s.λ += α * L * s.x
     end
