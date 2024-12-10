@@ -1,7 +1,7 @@
 module CellularSheaves
 
 export CellularSheaf, add_map!, coboundary_map, laplacian, is_global_section, SheafObjective, apply_f, apply_f_with_stabilizer, apply_lagrangian_to_x, apply_lagrangian_to_z, simulate!,
-    SheafNode, add_edge!, simulate_distributed!, simulate_distributed_separate_steps!, SheafVertex, SheafEdge, xLaplacian, zLaplacian, ThreadedSheaf, simulate_sequential!
+    SheafNode, add_edge!, simulate_distributed!, simulate_distributed_separate_steps!, SheafVertex, SheafEdge, xLaplacian, zLaplacian, ThreadedSheaf, simulate_sequential!, random_threaded_sheaf
 
 using BlockArrays
 using ForwardDiff
@@ -283,6 +283,7 @@ mutable struct ThreadedSheaf
     λ::BlockArray{Float64}
     f::Vector{Function}
     restriction_maps::BlockArray{Float64}  # Could be a sparse array. This is an e * v matrix.
+    L::BlockArray{Float64}
 end
 
 
@@ -294,7 +295,8 @@ function ThreadedSheaf(V::Vector{Int}, E::Vector{Int}, f::Union{Vector{Function}
     x = BlockArray{Float64}(ones(sum(V), 1), V, [1])
     λ = BlockArray{Float64}(zeros(sum(V), 1), V, [1])
     restriction_maps = BlockArray{Float64}(zeros(sum(E), sum(V)), E, V)
-    return ThreadedSheaf(x, λ, f, restriction_maps)
+    L = restriction_maps' * restriction_maps
+    return ThreadedSheaf(x, λ, f, restriction_maps, L)
 end
 
 
@@ -341,7 +343,7 @@ end
 
 
 function simulate!(s::ThreadedSheaf, α::Float64 = .1, n_steps::Int = 1000)  # Uzawa's algorithm. Currently not very distributed.
-    L = laplacian(s)
+    # L = laplacian(s)
     for _ in 1:n_steps
         # Gradient update step
         Threads.@threads for v in 1:blocksize(s.x)[1]   # Iterate the vertices. This will be @threads.
@@ -349,13 +351,13 @@ function simulate!(s::ThreadedSheaf, α::Float64 = .1, n_steps::Int = 1000)  # U
         end
 
         # Laplacian multiply step
-        s.x +=  α * (-2 * L * s.x - L * s.λ)
-        s.λ += α * L * s.x
+        s.x +=  α * (-2 * s.L * s.x - s.L * s.λ)
+        s.λ += α * s.L * s.x
     end
 end
 
 function simulate_sequential!(s::ThreadedSheaf, α::Float64 = .1, n_steps::Int = 1000)  # Uzawa's algorithm. Currently not very distributed.
-    L = laplacian(s)    # Make this a sparse matrix
+    # L = laplacian(s)    # Make this a sparse matrix..   (Store the Laplacian in the threaded sheaf)
     for _ in 1:n_steps
         # Gradient update step
         # println("Gradient update step:")
@@ -365,9 +367,29 @@ function simulate_sequential!(s::ThreadedSheaf, α::Float64 = .1, n_steps::Int =
 
         # Laplacian multiply step
         # println("Laplacian multiply step:")
-        s.x +=  α * (-2 * L * s.x - L * s.λ)
-        s.λ += α * L * s.x
+        s.x +=  α * (-2 * s.L * s.x - s.L * s.λ)
+        s.λ += α * s.L * s.x
     end
+end
+
+function random_threaded_sheaf(V::Int, E::Int, dim::Int)
+    random_sheaf = ThreadedSheaf([dim for _ in 1:V], [dim for _ in 1:E])
+
+    # Add random restriction maps
+    for e in 1:E
+        u = rand(1:V)
+        w = rand(1:V)
+        while w == u
+            w = rand(1:V)
+        end
+        add_map!(random_sheaf, u, e, rand(dim, dim))
+        add_map!(random_sheaf, w, e, rand(dim, dim))
+    end
+
+    # Add random objective functions
+    random_sheaf.f = [x -> only(x' * Q * x + b * x) for _ in 1:V for Q = [rand(dim, dim)], b = [rand(1, dim)]]
+    random_sheaf.L = laplacian(random_sheaf)
+    return random_sheaf
 end
 
 

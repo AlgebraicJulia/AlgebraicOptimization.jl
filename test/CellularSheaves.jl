@@ -192,6 +192,7 @@ sheaf_2 = ThreadedSheaf([2, 2], [1])
 add_map!(sheaf_2, 1, 1, [0 1])
 add_map!(sheaf_2, 2, 1, [0 1]) 
 sheaf_2.f = [x -> x[1]^2 + x[2]^2, x -> (x[1] - 2)^2 + (x[2] -2)^2]
+sheaf_2.L = laplacian(sheaf_2)
 
 sheaf_2_sequential = deepcopy(sheaf_2)
 simulate!(sheaf_2)
@@ -262,6 +263,21 @@ simulate_sequential!(big_sheaf_2_sequential, 1e-4, 10000)
 
 
 is_global_section(big_sheaf_2)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

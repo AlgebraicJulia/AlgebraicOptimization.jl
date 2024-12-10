@@ -1,110 +1,105 @@
+#  Run command:   julia --threads=auto --project=. C:\Users\samco\OneDrive\Desktop\AlgOptOfficial\AlgebraicOptimization.jl\test\CellularSheavesBenchmark.jl
+#  REPL startup command: julia --threads=auto
+
 using AlgebraicOptimization
 using Test
 using BenchmarkTools
 using LinearAlgebra
 using Random
+using CairoMakie
 
 Random.seed!(3)
+BLAS.set_num_threads(1)
 
 
-# println("Number of threads: ", Threads.nthreads())   # 20 on Sam's laptop
-BLAS.set_num_threads(20)   # Why did this slow me down?
+# Runtime vs. Stalk Dimension for ThreadedSheaves
 
+V = 20          # Number of vertices
+E = 20          # Number of edges
+dims = [1, 5, 10, 25, 50, 100, 200, 300, 400, 500]  # Range of dimensions to test
+times_simulate = Float64[]
+times_simulate_sequential = Float64[]
 
-# # ThreadedSheaf, sequential version (should be slower, hopefully)
+for dim in dims
+    println("\nBenchmarking for dim = ", dim)
 
-# sheaf_2 = ThreadedSheaf([2, 2], [1])
+    # Initialize big_sheaf_2 for the current dim
+    big_sheaf_2 = random_threaded_sheaf(V, E, dim)
+    big_sheaf_2_sequential = deepcopy(big_sheaf_2)
 
-# add_map!(sheaf_2, 1, 1, [0 1])
-# add_map!(sheaf_2, 2, 1, [0 1]) 
-# sheaf_2.f = [x -> x[1]^2 + x[2]^2, x -> (x[1] - 2)^2 + (x[2] -2)^2]
+    # Warm-up to avoid precompilation time
+    println("Warming up simulate_sequential! and simulate!")
+    simulate_sequential!(big_sheaf_2_sequential, 1e-4, 1)
+    simulate!(big_sheaf_2, 1e-4, 1)
 
-# sheaf_2_sequential = deepcopy(sheaf_2)
+    # Measure time for simulate_sequential!
+    time_seq = @elapsed simulate_sequential!(big_sheaf_2_sequential, 1e-4, 5)
+    println("Sequential time for dim = $dim: $time_seq seconds")
 
-# println("sheaf_2 parallel version:")
-# @btime simulate!(sheaf_2)   # Would @time be better since this method modifies? Maybe we want a version that doesn't modify for benchmarking purposes?
+    # Measure time for simulate!
+    time_par = @elapsed simulate!(big_sheaf_2, 1e-4, 5)
+    println("Parallel time for dim = $dim: $time_par seconds")
 
-# println("sheaf_2 sequential version:")
-# @btime simulate_sequential!(sheaf_2_sequential)
-
-
-
-# Big sheaf 2: V many vertices, E many edges
-# For simplicity of constructing, we're going to allow parallel edges
-
-V = 10
-E = 10
-dim = 300
-
-big_sheaf_2 = ThreadedSheaf([dim for _ in 1:V], [dim for _ in 1:E])  # Could we speed this up?
-
-# Add random restriction maps
-for e in 1:E
-    V = 10  # Example value
-    u = rand(1:V)
-    w = rand(1:V)
-    while w == u
-        w = rand(1:V)  # Keep generating until b is different from a
-    end
-    add_map!(big_sheaf_2, u, e, rand(dim, dim))
-    add_map!(big_sheaf_2, w, e, rand(dim, dim))
+    # Store results
+    push!(times_simulate_sequential, time_seq)
+    push!(times_simulate, time_par)
 end
 
-# Add random objective functions
-big_sheaf_2.f = [let Q = rand(dim, dim), b = rand(1, dim) 
-                     x -> only(x' * Q * x + b * x) 
-                 end for _ in 1:V]
 
-big_sheaf_2_sequential = deepcopy(big_sheaf_2)
-
-
-
-simulate_sequential!(big_sheaf_2_sequential, 1e-4, 1)
-simulate!(big_sheaf_2, 1e-4, 1)
-
-
-println("big_sheaf_2 sequential version:")
-@time simulate_sequential!(big_sheaf_2_sequential, 1e-4, 5)
-
-println("big_sheaf_2 parallel version:")
-@time simulate!(big_sheaf_2, 1e-4, 5)   # Add on checks that big_sheaf has all the right dimensions, etc?   -4 seems to be a sweet spot...
+# Graph results
+fig = Figure(size=(800, 600))
+ax = Axis(fig[1, 1],
+    title = "Runtime vs. Stalk Dimension for ThreadedSheaves",
+    xlabel = "Dimension",
+    ylabel = "Runtime (seconds)"
+)
+lines!(ax, dims, times_simulate_sequential; label="simulate_sequential!", linewidth=2, color=:blue)
+lines!(ax, dims, times_simulate; label="simulate!", linewidth=2, color=:red)
+save("performance_comparison_more_dims.png", fig)
 
 
+# Runtime vs. Number of BLAS threads
+
+V = 20          # Number of vertices
+E = 20          # Number of edges
+dim = 300  # Range of dimensions to test
+thread_counts = [i for i in 1:20]
+times_blas = Float64[]
 
 
+big_sheaf_2 = random_threaded_sheaf(V, E, dim)
+for blas in thread_counts
+    println("\nBenchmarking for blas = ", blas)
+    BLAS.set_num_threads(blas)
 
-#  Run command:   julia --threads=auto --project=. C:\Users\samco\OneDrive\Desktop\AlgOptOfficial\AlgebraicOptimization.jl\test\CellularSheavesBenchmark.jl
+    # Initialize big_sheaf_2 for the current dim
+    big_sheaf_2_copy = deepcopy(big_sheaf_2)
+    big_sheaf_2_copy_2 = deepcopy(big_sheaf_2)
+
+    # Warm-up to avoid precompilation time
+    println("Warming up simulate!")
+    simulate!(big_sheaf_2_copy, 1e-4, 1)
+
+    # Measure time for simulate!
+    time_par = @belapsed simulate!($big_sheaf_2_copy_2, 1e-4, 5)
+    println("Parallel time for blas = $blas: $time_par seconds")
+
+    # Store results
+    push!(times_blas, time_par)
+end
+
+# Make graph
+fig = Figure(size=(800, 600))
+ax = Axis(fig[1, 1],
+    title = "Runtime vs. Number of BLAS threads",
+    xlabel = "Number of BLAS threads",
+    ylabel = "Runtime (seconds)"
+)
+ylims!(ax, 0, 1) 
+lines!(ax, thread_counts, times_blas; linewidth=2, color=:blue)
+save("blas_comparison_belapsed.png", fig)
 
 
-# Why is @threads slower? Can we make it faster?
+# Why is @threads slower? Can we make it faster?]
 # How to well condition the problem so we reach a solution?
 # Incorporate Octavian to speed up the matrix multiply
-
-
-
-
-
-# Basic thread testing
-
-# random = zeros(100)
-
-# function fill(random)
-#     Threads.@threads for i in eachindex(random)
-#         random[i] = rand()  # Assign a random float between 0 and 1
-#     end
-# end
-
-
-# function fill_sequential(random)
-#     for i in eachindex(random)
-#         random[i] = rand()  # Assign a random float between 0 and 1
-#     end
-# end
-
-# @btime fill(random)
-# println(random)
-# println("num threads: ", Threads.nthreads())
-
-# @btime fill_sequential(random)
-
-# @btime fill(random)
