@@ -1,10 +1,11 @@
 using Distributed
-#using ..SheafNodes
+using LinearAlgebra
 
-function laplacian_step(workers::Vector{Int}, node_refs::Vector{Future}, step_size::Float32)
-    @everywhere function local_laplacian_step(node_ref, step_size)
+function laplacian_step!(workers::Vector{Int}, node_refs::Vector{Future}, step_size::Float32)
+    # Define this function for all the nodes
+    @everywhere function local_laplacian_step!(node_ref, step_size)
         x_old = fetch(node_ref).x
-        println("current x: $x_old")
+        # println("current x: $x_old")
         delta_x = zeros(fetch(node_ref).dimension)
 
         # Compute updated state
@@ -22,34 +23,13 @@ function laplacian_step(workers::Vector{Int}, node_refs::Vector{Future}, step_si
 
         # Update local state
         fetch(node_ref).x = x_new
-    end
+    end # local_laplacian_step
 
+    # Have each node execute a local laplacian step
     for (w, nr) in zip(workers, node_refs)
-        remote_do(local_laplacian_step, w, nr, step_size)
+        remote_do(local_laplacian_step!, w, nr, step_size)
     end
 end
-
-#=@everywhere function local_laplacian_step(node_ref)
-    #node = fetch(node_ref)
-    x_old = fetch(node_ref).x
-    println("current x: $x_old")
-    x_new = zeros(fetch(node_ref).dimension)
-
-    # Compute updated state
-    for (n, rm) in fetch(node_ref).neighbors
-        outgoing_edge_val = rm*x_old
-        incoming_edge_val = take!(fetch(node_ref).in_channels[n])
-        x_new += rm'*(outgoing_edge_val - incoming_edge_val)
-    end
-
-    # Broadcast updated state to neighbors
-    for (n, rm) in fetch(node_ref).neighbors
-        put!(fetch(node_ref).out_channels[n], rm*x_new)
-    end
-
-    # Update local state
-    fetch(node_ref).x = x_new
-end=#
 
 # Returns remote references for each node and communication channels for each edge
 function random_distributed_sheaf(num_nodes, edge_probability, restriction_map_dimension, restriction_map_density)
@@ -100,3 +80,38 @@ function random_distributed_sheaf(num_nodes, edge_probability, restriction_map_d
     end
     return workers, node_refs
 end
+
+function distance_from_consensus(node_refs)
+    @everywhere @eval using LinearAlgebra
+    return @distributed (+) for nr in node_refs
+        node_distance = 0.0
+        # I think there is some double counting happening in here but idrc
+        for ((_, in_channel), (_, out_channel)) in zip(fetch(nr).in_channels, fetch(nr).out_channels)
+            node_distance += norm(fetch(in_channel) - fetch(out_channel))
+        end
+        node_distance
+    end
+end
+
+# Returns a list of distances from consensus over the iterations
+function iterate_laplacian!(workers, node_refs, step_size, num_iters)
+    distances = Float64[]
+
+    for _ in 1:num_iters+1
+        laplacian_step!(workers, node_refs, step_size)
+        push!(distances, distance_from_consensus(node_refs))
+    end
+    return distances
+end
+
+# Some tests
+# TODO: Figure out why this blows up for larger examples
+# For some reason these tests error if uncommenting because of some SheafNode load bug
+# Until we figure that out, just do these commands in the REPL to see the results.
+#=using Plots
+
+workers, node_refs = random_distributed_sheaf(5, .5, 5, .5)
+
+loss = iterate_laplacian!(workers, node_refs, Float32(0.1), 20)
+
+plot(loss)=#
