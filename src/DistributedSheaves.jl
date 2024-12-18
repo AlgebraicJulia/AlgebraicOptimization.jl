@@ -1,18 +1,19 @@
 using Distributed
 #using ..SheafNodes
 
-function laplacian_step(workers::Vector{Int}, node_refs::Vector{Future})
-    @everywhere function local_laplacian_step(node_ref)
+function laplacian_step(workers::Vector{Int}, node_refs::Vector{Future}, step_size::Float32)
+    @everywhere function local_laplacian_step(node_ref, step_size)
         x_old = fetch(node_ref).x
         println("current x: $x_old")
-        x_new = zeros(fetch(node_ref).dimension)
+        delta_x = zeros(fetch(node_ref).dimension)
 
         # Compute updated state
         for (n, rm) in fetch(node_ref).neighbors
             outgoing_edge_val = rm*x_old
             incoming_edge_val = take!(fetch(node_ref).in_channels[n])
-            x_new += rm'*(outgoing_edge_val - incoming_edge_val)
+            delta_x += rm'*(outgoing_edge_val - incoming_edge_val)
         end
+        x_new = x_old - step_size*delta_x
 
         # Broadcast updated state to neighbors
         for (n, rm) in fetch(node_ref).neighbors
@@ -24,7 +25,7 @@ function laplacian_step(workers::Vector{Int}, node_refs::Vector{Future})
     end
 
     for (w, nr) in zip(workers, node_refs)
-        remote_do(local_laplacian_step, w, nr)
+        remote_do(local_laplacian_step, w, nr, step_size)
     end
 end
 
