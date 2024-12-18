@@ -33,6 +33,7 @@ end
 
 # Returns remote references for each node and communication channels for each edge
 function random_distributed_sheaf(num_nodes, edge_probability, restriction_map_dimension, restriction_map_density)
+    # Set up workers and make sure they have all the code they need
     workers = addprocs(num_nodes)
     @everywhere @eval using SparseArrays
     @everywhere include("src/SheafNodes.jl")
@@ -41,11 +42,12 @@ function random_distributed_sheaf(num_nodes, edge_probability, restriction_map_d
     coin()::Bool = rand() < edge_probability
 
     # Spawn sheaf nodes on every worker
-    #node_refs = Dict{Int64, Future}
     node_refs = Future[]
     for w in workers
-        #node_refs[w] = @spawnat w SheafNode(w, Dict{Int32, Matrix{Float32}}())
-        push!(node_refs, @spawnat w SheafNode(w, n, Dict{Int32, SparseMatrixCSC{Float32, Int32}}(), Dict{Int32, RemoteChannel}(), Dict{Int32, RemoteChannel}(), rand(n)))
+        push!(node_refs, @spawnat w SheafNode(w, n, 
+            Dict{Int32, SparseMatrixCSC{Float32, Int32}}(), # restriction maps
+            Dict{Int32, RemoteChannel}(),                   # inbound channels
+            Dict{Int32, RemoteChannel}(), rand(n)))         # outbound channels, initial state
     end
 
     # Add random sheaf edges
@@ -65,6 +67,7 @@ function random_distributed_sheaf(num_nodes, edge_probability, restriction_map_d
                 i_to_j_channel = RemoteChannel(() -> Channel{Vector{Float32}}(1))
                 j_to_i_channel = RemoteChannel(() -> Channel{Vector{Float32}}(1))
 
+                # Set the appropriate remote channels for each node and seed them with the initial values
                 remote_do(node_ref -> begin 
                                         fetch(node_ref).in_channels[j] = j_to_i_channel 
                                         fetch(node_ref).out_channels[j] = i_to_j_channel
@@ -74,7 +77,7 @@ function random_distributed_sheaf(num_nodes, edge_probability, restriction_map_d
                                         fetch(node_ref).in_channels[i] = i_to_j_channel 
                                         fetch(node_ref).out_channels[i] = j_to_i_channel
                                         put!(j_to_i_channel, fetch(Bref)*fetch(node_ref).x)
-                                       end, j, node_refs[j-1])
+                                      end, j, node_refs[j-1])
             end
         end
     end
@@ -85,7 +88,7 @@ function distance_from_consensus(node_refs)
     @everywhere @eval using LinearAlgebra
     return @distributed (+) for nr in node_refs
         node_distance = 0.0
-        # I think there is some double counting happening in here but idrc
+        # There is some double counting happening in here but idrc
         for ((_, in_channel), (_, out_channel)) in zip(fetch(nr).in_channels, fetch(nr).out_channels)
             node_distance += norm(fetch(in_channel) - fetch(out_channel))
         end
