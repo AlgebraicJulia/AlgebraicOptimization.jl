@@ -1,24 +1,35 @@
 module SheafNodes
 
-export SheafNode, add_neighbor!
+export DistributedSheafNode, ThreadedSheafNode, add_neighbor!, neighbors
 
 using Distributed
 using SparseArrays
 
-mutable struct SheafNode
+abstract type AbstractSheafNode end
+
+mutable struct ThreadedSheafNode <: AbstractSheafNode
     id::Int32
     dimension::Int32
-    neighbors::Dict{Int32, SparseMatrixCSC{Float32, Int32}}
+    neighbors::Dict{Int32, AbstractMatrix}
+    in_channels::Dict{Int32, Channel}
+    out_channels::Dict{Int32, Channel}
+    x::Vector{Float32}
+end
+
+mutable struct DistributedSheafNode <: AbstractSheafNode
+    id::Int32
+    dimension::Int32
+    neighbors::Dict{Int32, AbstractMatrix}
     in_channels::Dict{Int32, RemoteChannel}
     out_channels::Dict{Int32, RemoteChannel}
     x::Vector{Float32}
 end
 
-function add_neighbor!(s::SheafNode, n_id::Int32, restriction_map)
+function add_neighbor!(s::AbstractSheafNode, n_id::Int32, restriction_map)
     s.neighbors[n_id] = restriction_map
 end
 
-function neighbors(s::SheafNode)
+function neighbors(s::AbstractSheafNode)
     return collect(keys(s.neighbors))
 end
 

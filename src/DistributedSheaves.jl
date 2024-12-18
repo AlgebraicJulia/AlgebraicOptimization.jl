@@ -44,8 +44,9 @@ function random_distributed_sheaf(num_nodes, edge_probability, restriction_map_d
     # Spawn sheaf nodes on every worker
     node_refs = Future[]
     for w in workers
-        push!(node_refs, @spawnat w SheafNode(w, n, 
+        push!(node_refs, @spawnat w DistributedSheafNode(w, n, 
             Dict{Int32, SparseMatrixCSC{Float32, Int32}}(), # restriction maps
+            #Dict{Int32, Matrix{Float32}}(),
             Dict{Int32, RemoteChannel}(),                   # inbound channels
             Dict{Int32, RemoteChannel}(), rand(n)))         # outbound channels, initial state
     end
@@ -59,6 +60,8 @@ function random_distributed_sheaf(num_nodes, edge_probability, restriction_map_d
                 # A should live on proc i and B should live on proc j
                 Aref = @spawnat i sprand(n,n,p)
                 Bref = @spawnat j sprand(n,n,p)
+                #Aref = @spawnat i rand(n,n)
+                #Bref = @spawnat j rand(n,n)
 
                 remote_do(node_ref -> fetch(node_ref).neighbors[j] = fetch(Aref), i, node_refs[i-1])
                 remote_do(node_ref -> fetch(node_ref).neighbors[i] = fetch(Bref), j, node_refs[j-1])
