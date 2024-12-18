@@ -66,16 +66,19 @@ end
 
 
 function distance_from_consensus(nodes)
-    total_distance = 0.0
-    for node in nodes
+    #total_distance = 0.0
+    node_distances = zeros(length(nodes))
+    #Threads.@threads for (i,node) in zip(collect(1:length(nodes)),nodes)
+    Threads.@threads for i in eachindex(nodes)
         node_distance = 0.0
         # There is some double counting happening in here but idrc
-        for ((_, in_channel), (_, out_channel)) in zip(node.in_channels, node.out_channels)
+        for ((_, in_channel), (_, out_channel)) in zip(nodes[i].in_channels, nodes[i].out_channels)
             node_distance += norm(fetch(in_channel) - fetch(out_channel))
         end
-        total_distance += node_distance
+        #total_distance += node_distance
+        node_distances[i] = node_distance
     end
-    return total_distance
+    return sum(node_distances)
 end
 
 # Returns a list of distances from consensus over the iterations
