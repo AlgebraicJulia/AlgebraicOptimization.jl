@@ -42,9 +42,9 @@ makedocs(
   checkdocs=:none,
   pages=Any[
     "AlgebraicOptimization.jl"=>"index.md",
-    "Examples"=>Any[
-      "generated/literate_example.md",
-    ],
+    # "Examples"=>Any[
+    #   "generated/literate_example.md",
+    # ],
     "Library Reference"=>"api.md",
   ]
 )
