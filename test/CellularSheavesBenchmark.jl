@@ -13,6 +13,7 @@ BLAS.set_num_threads(1)
 
 
 # Runtime vs. Stalk Dimension for ThreadedSheaves
+# TODO: BLAS.set_num_threads = 1 inside sequential (and set it back at the end) but NOT in the 
 
 V = 20          # Number of vertices
 E = 20          # Number of edges

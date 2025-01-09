@@ -200,6 +200,7 @@ simulate_sequential!(sheaf_2_sequential)
 
 @test sheaf_2.x ≈ [0; 1; 2; 1]  atol=1e-3  
 @test sheaf_2.x ≈ [0; 1; 2; 1]  atol=1e-3  
+@test is_global_section(sheaf_2)
 
 
 
