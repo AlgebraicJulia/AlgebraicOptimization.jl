@@ -4,51 +4,6 @@ using Base.Threads
 using SparseArrays
 using LinearAlgebra
 
-#=function node_consensus_objective(node::ThreadedSheafNode, x, neighbor_xs::Dict{Int, Vector})
-    loss = 0.0
-    for (n, rm) in node.neighbors
-        outgoing_edge_val = rm*x
-        incoming_edge_val = neighbor_xs[n]
-        loss += LinearAlgebra.norm_sqr(outgoing_edge_val - incoming_edge_val)
-    end
-    return loss
-end
-
-function local_line_search(node::ThreadedSheafNode, x, delta_x, neighbor_xs::Dict{Int, Vector})
-    c = 0.5
-    τ = 0.5
-    m = (-delta_x)'*delta_x
-    t = c*m
-    a = .5
-    while node_consensus_objective(node, x, neighbor_xs) - node_consensus_objective(node, x + a*delta_x, neighbor_xs) < a*t
-        a = τ*a
-    end
-    println("Step size: $a")
-    return a
-end
-
-function local_laplacian_step!(node)
-    x_old = node.x
-    delta_x = zeros(node.dimension)
-
-    neighbor_xs = Dict{Int, Vector}()
-    for (n, rm) in node.neighbors
-        outgoing_edge_val = rm*x_old
-        incoming_edge_val = take!(node.in_channels[n])
-        neighbor_xs[n] = incoming_edge_val
-        delta_x -= rm'*(outgoing_edge_val - incoming_edge_val)
-    end
-    step_size = local_line_search(node, x_old, delta_x, neighbor_xs)
-    x_new = x_old + step_size*delta_x
-
-    for (n, rm) in node.neighbors
-        put!(node.out_channels[n], rm*x_new)
-    end
-
-    node.x = x_new
-end=#
-
-
 function local_laplacian_step!(node, step_size)
     x_old = node.x
     delta_x = zeros(node.dimension)
@@ -72,12 +27,6 @@ function laplacian_step!(nodes, step_size::Float32)
         local_laplacian_step!(node, step_size)
     end
 end
-
-#=function laplacian_step!(nodes)
-    Threads.@threads for node in nodes
-        local_laplacian_step!(node)
-    end
-end=#
 
 # Compute the local update direction for a given node
 function local_descent_direction(node)
@@ -131,10 +80,10 @@ function threaded_sum(x, y)
     return res
 end
 
-function line_search(nodes, delta_x::Vector{Vector{Float32}})#, prev_a)
+function line_search(nodes, delta_x::Vector{Vector{Float32}})
     @assert length(nodes) == length(delta_x)
-    c = 0.75
-    τ = 0.25
+    c = 0.5
+    τ = 0.1
     ms = Vector{Float32}(undef, length(nodes))
     Threads.@threads for i in eachindex(delta_x)
         ms[i] = (-delta_x[i])'*delta_x[i]
@@ -142,8 +91,7 @@ function line_search(nodes, delta_x::Vector{Vector{Float32}})#, prev_a)
     m = sum(ms)
     #println(m)
     t = -c*m
-    #a = prev_a
-    a=Float32(.1)
+    a=Float32(0.001)
     x = [node.x for node in nodes]
     while consensus_objective(nodes, x) - consensus_objective(nodes, threaded_sum(x, a .* delta_x)) < a*t
         a = τ*a
@@ -158,7 +106,7 @@ function update_nodes!(nodes, a, delta_x)
     Threads.@threads for i in eachindex(nodes)
         nodes[i].x += a*delta_x[i]
         for (n, rm) in nodes[i].neighbors
-            # Consume from buffers
+            # Update the buffers
             take!(nodes[i].in_channels[n])
             put!(nodes[i].out_channels[n], rm*nodes[i].x)
         end
@@ -166,12 +114,10 @@ function update_nodes!(nodes, a, delta_x)
 end
 
 # Overwrites delta_x
-function laplacian_step!(nodes, delta_x::Vector{Vector{Float32}})#, prev_ss)
+function laplacian_step!(nodes, delta_x::Vector{Vector{Float32}})
     descent_direction!(nodes, delta_x)
-    #step_size = line_search(nodes, delta_x, prev_ss)
     step_size = line_search(nodes, delta_x)
     update_nodes!(nodes, step_size, delta_x)
-    #return step_size
 end
 
 function random_threaded_sheaf(num_nodes, edge_probability, restriction_map_dimension, restriction_map_density)
@@ -194,8 +140,8 @@ function random_threaded_sheaf(num_nodes, edge_probability, restriction_map_dime
                 nodes[i].neighbors[j] = A
                 nodes[j].neighbors[i] = B
 
-                i_to_j_channel = Channel{Vector{Float32}}(1)
-                j_to_i_channel = Channel{Vector{Float32}}(1)
+                i_to_j_channel = Channel{Vector{Float32}}(2)
+                j_to_i_channel = Channel{Vector{Float32}}(2)
 
                 nodes[i].in_channels[j] = j_to_i_channel
                 nodes[i].out_channels[j] = i_to_j_channel
@@ -228,7 +174,7 @@ function distance_from_consensus(nodes)
 end
 
 # Returns a list of distances from consensus over the iterations
-function iterate_laplacian!(nodes, step_size, num_iters)
+function iterate_laplacian!(nodes, step_size, num_iters::Int)
     distances = Float64[]
 
     for _ in 1:num_iters
@@ -239,28 +185,51 @@ function iterate_laplacian!(nodes, step_size, num_iters)
     return distances
 end
 
-function iterate_laplacian!(nodes, num_iters)
+function iterate_laplacian!(nodes, step_size, epsilon::Float64)
     distances = Float64[]
-    dimensions = (n -> n.dimension).(nodes)
-    delta_x = [Vector{Float32}(undef, d) for d in dimensions]
-    #ss = 0.5
-    for _ in 1:num_iters
+
+    while true
         push!(distances, distance_from_consensus(nodes))
-        laplacian_step!(nodes, delta_x)#, ss)
+        laplacian_step!(nodes, step_size)
+        
+        if distances[end] <= epsilon
+            break
+        end
     end
     push!(distances, distance_from_consensus(nodes))
     return distances
 end
 
-#=function iterate_laplacian!(nodes, num_iters)
+function iterate_laplacian!(nodes, num_iters::Int)
     distances = Float64[]
-
-    for _ in 1:num_iters+1
-        laplacian_step!(nodes)
+    dimensions = (n -> n.dimension).(nodes)
+    delta_x = [Vector{Float32}(undef, d) for d in dimensions]
+    for _ in 1:num_iters
         push!(distances, distance_from_consensus(nodes))
+        laplacian_step!(nodes, delta_x)
+
+        
     end
+    push!(distances, distance_from_consensus(nodes))
     return distances
-end=#
+end
+
+function iterate_laplacian!(nodes, epsilon::Float64)
+    distances = Float64[]
+    dimensions = (n -> n.dimension).(nodes)
+    delta_x = [Vector{Float32}(undef, d) for d in dimensions]
+    while true
+        push!(distances, distance_from_consensus(nodes))
+        laplacian_step!(nodes, delta_x)
+
+        if distances[end] <= epsilon
+            break
+        end
+    end
+    push!(distances, distance_from_consensus(nodes))
+    return distances
+end
+
 
 # Randomly reinitialize the nodes states
 function random_initialization(nodes::Vector{ThreadedSheafNode})
