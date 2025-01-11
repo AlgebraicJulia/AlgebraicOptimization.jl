@@ -1,6 +1,6 @@
 module ThreadedSheaves
 
-export random_threaded_sheaf, random_initialization, initialize!
+export random_threaded_sheaf, random_initialization, initialize!, compute_clusters
 
 import ..DistributedSheaves: iterate_laplacian!, distance_from_consensus
 
@@ -273,6 +273,17 @@ function random_threaded_sheaf(g::Graph, restriction_map_dimension, restriction_
     return nodes
 end
 
+function compute_clusters(g::Graph, num_clusters::Int)
+    p = Metis.partition(g, num_clusters)
+
+    clusters = Vector{Vector{Int}}(undef, num_clusters)
+
+    for i in 1:num_clusters
+        clusters[i] = findall(x -> x == i, p)
+    end
+
+    return clusters
+end
 
 function distance_from_consensus(nodes)
     #total_distance = 0.0
