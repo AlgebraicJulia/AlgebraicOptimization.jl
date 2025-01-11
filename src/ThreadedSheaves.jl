@@ -1,47 +1,52 @@
-include("SheafNodes.jl")
-using .SheafNodes
+module ThreadedSheaves
+
+export random_threaded_sheaf, random_initialization, initialize!
+
+import ..DistributedSheaves: iterate_laplacian!, distance_from_consensus
+
+using ..SheafNodes
 using Base.Threads
 using SparseArrays
 using LinearAlgebra
 
-function local_laplacian_step!(node, step_size)
+function local_laplacian_step!(node::ThreadedSheafNode, step_size)
     x_old = node.x
     delta_x = zeros(node.dimension)
 
     for (n, rm) in node.neighbors
-        outgoing_edge_val = rm*x_old
+        outgoing_edge_val = rm * x_old
         incoming_edge_val = take!(node.in_channels[n])
-        delta_x -= rm'*(outgoing_edge_val - incoming_edge_val)
+        delta_x -= rm' * (outgoing_edge_val - incoming_edge_val)
     end
-    x_new = x_old + step_size*delta_x
+    x_new = x_old + step_size * delta_x
 
     for (n, rm) in node.neighbors
-        put!(node.out_channels[n], rm*x_new)
+        put!(node.out_channels[n], rm * x_new)
     end
 
     node.x = x_new
 end
 
-function laplacian_step!(nodes, step_size::Float32)
+function laplacian_step!(nodes::Vector{ThreadedSheafNode}, step_size::Float32)
     Threads.@threads for node in nodes
         local_laplacian_step!(node, step_size)
     end
 end
 
 # Compute the local update direction for a given node
-function local_descent_direction(node)
+function local_descent_direction(node::ThreadedSheafNode)
     x_old = node.x
     delta_x = zeros(node.dimension)
 
     for (n, rm) in node.neighbors
-        outgoing_edge_val = rm*x_old
+        outgoing_edge_val = rm * x_old
         incoming_edge_val = fetch(node.in_channels[n])
-        delta_x -= rm'*(outgoing_edge_val - incoming_edge_val)
+        delta_x -= rm' * (outgoing_edge_val - incoming_edge_val)
     end
     return delta_x
 end
 
-function descent_direction!(nodes, results::Vector{Vector{Float32}})
+function descent_direction!(nodes::Vector{ThreadedSheafNode}, results::Vector{Vector{Float32}})
     # Allocate a shared memory array for results
     #dimensions = (n -> n.dimension).nodes
     #results = [Vector{Float32}(undef, d) for d in dimensions] # make a version that passes this in as an argument to override
@@ -54,7 +59,7 @@ end
 function local_consensus_objective(node::ThreadedSheafNode, x::Vector{Float32})
     loss = 0.0
     for (n, rm) in node.neighbors
-        outgoing_edge_val = rm*x
+        outgoing_edge_val = rm * x
         incoming_edge_val = fetch(node.in_channels[n])
         loss += LinearAlgebra.norm_sqr(outgoing_edge_val - incoming_edge_val)
     end
@@ -86,15 +91,15 @@ function line_search(nodes, delta_x::Vector{Vector{Float32}})
     τ = 0.1
     ms = Vector{Float32}(undef, length(nodes))
     Threads.@threads for i in eachindex(delta_x)
-        ms[i] = (-delta_x[i])'*delta_x[i]
+        ms[i] = (-delta_x[i])' * delta_x[i]
     end
     m = sum(ms)
     #println(m)
-    t = -c*m
-    a=Float32(0.001)
+    t = -c * m
+    a = Float32(0.001)
     x = [node.x for node in nodes]
-    while consensus_objective(nodes, x) - consensus_objective(nodes, threaded_sum(x, a .* delta_x)) < a*t
-        a = τ*a
+    while consensus_objective(nodes, x) - consensus_objective(nodes, threaded_sum(x, a .* delta_x)) < a * t
+        a = τ * a
     end
     #println("Step size: $a")
     return a
@@ -104,11 +109,11 @@ end
 # Also updates communication channels.
 function update_nodes!(nodes, a, delta_x)
     Threads.@threads for i in eachindex(nodes)
-        nodes[i].x += a*delta_x[i]
+        nodes[i].x += a * delta_x[i]
         for (n, rm) in nodes[i].neighbors
             # Update the buffers
             take!(nodes[i].in_channels[n])
-            put!(nodes[i].out_channels[n], rm*nodes[i].x)
+            put!(nodes[i].out_channels[n], rm * nodes[i].x)
         end
     end
 end
@@ -126,16 +131,16 @@ function random_threaded_sheaf(num_nodes, edge_probability, restriction_map_dime
     n, p = restriction_map_dimension, restriction_map_density
     for i in 1:num_nodes
         push!(nodes, ThreadedSheafNode(i, n,
-            Dict{Int32, SparseMatrixCSC{Float32, Int32}}(),
-            Dict{Int32, Channel}(),
-            Dict{Int32, Channel}(), rand(n)))
+            Dict{Int32,SparseMatrixCSC{Float32,Int32}}(),
+            Dict{Int32,Channel}(),
+            Dict{Int32,Channel}(), rand(n)))
     end
 
     for i in 1:num_nodes
         for j in i+1:num_nodes
             if coin()
-                A = sprand(n,n,p)
-                B = sprand(n,n,p)
+                A = sprand(n, n, p)
+                B = sprand(n, n, p)
 
                 nodes[i].neighbors[j] = A
                 nodes[j].neighbors[i] = B
@@ -145,11 +150,11 @@ function random_threaded_sheaf(num_nodes, edge_probability, restriction_map_dime
 
                 nodes[i].in_channels[j] = j_to_i_channel
                 nodes[i].out_channels[j] = i_to_j_channel
-                put!(i_to_j_channel, A*nodes[i].x)
+                put!(i_to_j_channel, A * nodes[i].x)
 
                 nodes[j].in_channels[i] = i_to_j_channel
                 nodes[j].out_channels[i] = j_to_i_channel
-                put!(j_to_i_channel, B*nodes[j].x)
+                put!(j_to_i_channel, B * nodes[j].x)
             end
         end
     end
@@ -174,7 +179,7 @@ function distance_from_consensus(nodes)
 end
 
 # Returns a list of distances from consensus over the iterations
-function iterate_laplacian!(nodes, step_size, num_iters::Int)
+function iterate_laplacian!(nodes::Vector{ThreadedSheafNode}, step_size, num_iters::Int)
     distances = Float64[]
 
     for _ in 1:num_iters
@@ -185,13 +190,13 @@ function iterate_laplacian!(nodes, step_size, num_iters::Int)
     return distances
 end
 
-function iterate_laplacian!(nodes, step_size, epsilon::Float64)
+function iterate_laplacian!(nodes::Vector{ThreadedSheafNode}, step_size, epsilon::Float64)
     distances = Float64[]
 
     while true
         push!(distances, distance_from_consensus(nodes))
         laplacian_step!(nodes, step_size)
-        
+
         if distances[end] <= epsilon
             break
         end
@@ -200,7 +205,7 @@ function iterate_laplacian!(nodes, step_size, epsilon::Float64)
     return distances
 end
 
-function iterate_laplacian!(nodes, num_iters::Int)
+function iterate_laplacian!(nodes::Vector{ThreadedSheafNode}, num_iters::Int)
     distances = Float64[]
     dimensions = (n -> n.dimension).(nodes)
     delta_x = [Vector{Float32}(undef, d) for d in dimensions]
@@ -208,13 +213,13 @@ function iterate_laplacian!(nodes, num_iters::Int)
         push!(distances, distance_from_consensus(nodes))
         laplacian_step!(nodes, delta_x)
 
-        
+
     end
     push!(distances, distance_from_consensus(nodes))
     return distances
 end
 
-function iterate_laplacian!(nodes, epsilon::Float64)
+function iterate_laplacian!(nodes::Vector{ThreadedSheafNode}, epsilon::Float64)
     distances = Float64[]
     dimensions = (n -> n.dimension).(nodes)
     delta_x = [Vector{Float32}(undef, d) for d in dimensions]
@@ -238,19 +243,20 @@ function random_initialization(nodes::Vector{ThreadedSheafNode})
         node.x = x
         for (n, rm) in node.neighbors
             take!(node.out_channels[n])
-            put!(node.out_channels[n], rm*x)
+            put!(node.out_channels[n], rm * x)
         end
     end
 end
 
-function initialize!(nodes, xs)
+function initialize!(nodes::Vector{ThreadedSheafNode}, xs)
     for (x, node) in zip(xs, nodes)
         node.x = x
 
         for (n, rm) in node.neighbors
             take!(node.out_channels[n])
-            put!(node.out_channels[n], rm*x)
+            put!(node.out_channels[n], rm * x)
         end
     end
 end
 
+end

@@ -1,8 +1,10 @@
 module CellularSheaves
 
 export CellularSheaf, add_map!, coboundary_map, laplacian, is_global_section, SheafObjective, apply_f, apply_f_with_stabilizer, apply_lagrangian_to_x, apply_lagrangian_to_z, simulate!,
-    SheafNode, add_edge!, simulate_distributed!, simulate_distributed_separate_steps!, SheafVertex, SheafEdge, xLaplacian, zLaplacian, ThreadedSheaf, optimize!,
+    SheafNode, simulate_distributed!, simulate_distributed_separate_steps!, SheafVertex, SheafEdge, xLaplacian, zLaplacian, ThreadedSheaf, optimize!,
     OptimizationAlgorithm
+
+import Catlab: add_edge!
 
 using BlockArrays
 using ForwardDiff
@@ -94,11 +96,11 @@ function apply_lagrangian_to_z(so::SheafObjective)
 end
 
 
-function simulate!(so::SheafObjective, λ::Float64 = .1, n_steps::Int = 100)  # Uzawa's algorithm. Currently not very distributed.
+function simulate!(so::SheafObjective, λ::Float64=0.1, n_steps::Int=100)  # Uzawa's algorithm. Currently not very distributed.
     for _ in 1:n_steps
         x_update = -ForwardDiff.gradient(apply_lagrangian_to_x(so), so.x)   # Ideally, these should be done separately for the individual x's.
         z_update = ForwardDiff.gradient(apply_lagrangian_to_z(so), so.z)   # Ideally, these should be done separately for the individual z's.
-        
+
         so.x += x_update * λ
         so.z += z_update * λ
         # println(z_update - laplacian(so.s) * so.x)   <-- Sanity check; always should be 0
@@ -108,7 +110,7 @@ end
 
 # First distriubted implementation: maps from neighboring SheafNodes to the restriction maps into the shared edges
 mutable struct SheafNode
-    adj::Dict{SheafNode, Array}  # v   ---- e  ------ w   is stored as   {w -> (v -> e)}
+    adj::Dict{SheafNode,Array}  # v   ---- e  ------ w   is stored as   {w -> (v -> e)}
     f::Function    # Objective function at vertex
     x::Vector  # Primary variables
     z::Vector  # Dual variables
@@ -127,7 +129,7 @@ end
 
 
 # Uses the distributed sheaf structure to do Uzawa's algorithm, but executes sequentially (not distributed)
-function simulate!(sheaf::Vector{SheafNode}, λ::Float64 = .1, n_steps::Int = 10) 
+function simulate!(sheaf::Vector{SheafNode}, λ::Float64=0.1, n_steps::Int=10)
     for _ in 1:n_steps
         for i in 1:length(sheaf)
             v = sheaf[i]
@@ -135,7 +137,7 @@ function simulate!(sheaf::Vector{SheafNode}, λ::Float64 = .1, n_steps::Int = 10
             z_update = zeros(length(v.z))
 
             # Compute updates
-            x_update +=  -ForwardDiff.gradient(v.f, v.x)
+            x_update += -ForwardDiff.gradient(v.f, v.x)
             for u in keys(v.adj)
                 x_update += -2 * v.adj[u]' * (v.adj[u] * v.x - u.adj[v] * u.x) - v.adj[u]' * (v.adj[u] * v.z - u.adj[v] * u.z)
                 z_update += v.adj[u]' * (v.adj[u] * v.x - u.adj[v] * u.x)
@@ -150,15 +152,15 @@ end
 
 
 # Same as above but uses @distributed to actually execute in a distributed way
-function simulate_distributed!(sheaf::Vector{SheafNode}, λ::Float64 = .1, n_steps::Int = 10)   
+function simulate_distributed!(sheaf::Vector{SheafNode}, λ::Float64=0.1, n_steps::Int=10)
     for _ in 1:n_steps
-        @sync @distributed for i in 1:length(sheaf) 
+        @sync @distributed for i in 1:length(sheaf)
             v = sheaf[i]
             x_update = zeros(length(v.x))
             z_update = zeros(length(v.z))
 
             # Compute updates
-            x_update +=  -ForwardDiff.gradient(v.f, v.x)
+            x_update += -ForwardDiff.gradient(v.f, v.x)
             for u in keys(v.adj)
                 x_update += -2 * v.adj[u]' * (v.adj[u] * v.x - u.adj[v] * u.x) - v.adj[u]' * (v.adj[u] * v.z - u.adj[v] * u.z)
                 z_update += v.adj[u]' * (v.adj[u] * v.x - u.adj[v] * u.x)
@@ -173,7 +175,7 @@ end
 
 
 # Same Uzawa's algorithm, except computing and applying updates are separated into different steps. More suited to the literature.
-function simulate_distributed_separate_steps!(sheaf::Vector{SheafNode}, λ::Float64 = .1, n_steps::Int = 10) 
+function simulate_distributed_separate_steps!(sheaf::Vector{SheafNode}, λ::Float64=0.1, n_steps::Int=10)
     for _ in 1:n_steps
         # Phase 1: Compute updates
         @sync @distributed for i in 1:length(sheaf)   # Separate read/compute and write steps? Might be helpful...     
@@ -182,7 +184,7 @@ function simulate_distributed_separate_steps!(sheaf::Vector{SheafNode}, λ::Floa
             v.z_update .- 0  # Fill with zeros
 
             # Compute updates
-            v.x_update +=  -ForwardDiff.gradient(v.f, v.x)
+            v.x_update += -ForwardDiff.gradient(v.f, v.x)
             for u in keys(v.adj)
                 v.x_update += -2 * v.adj[u]' * (v.adj[u] * v.x - u.adj[v] * u.x) - v.adj[u]' * (v.adj[u] * v.z - u.adj[v] * u.z)
                 v.z_update += v.adj[u]' * (v.adj[u] * v.x - u.adj[v] * u.x)
@@ -190,10 +192,10 @@ function simulate_distributed_separate_steps!(sheaf::Vector{SheafNode}, λ::Floa
         end
 
         # Phase 2: Apply updates
-        @sync @distributed for v in sheaf 
-                # Apply updates
-                v.x += v.x_update * λ
-                v.z += v.z_update * λ
+        @sync @distributed for v in sheaf
+            # Apply updates
+            v.x += v.x_update * λ
+            v.z += v.z_update * λ
         end
     end
 end
@@ -249,7 +251,7 @@ function zLaplacian(v::SheafVertex, e::SheafEdge)
 end
 
 # This newer implementation with the separate vertex and edge workers makes the simulate method cleaner
-function simulate_distributed!(sheaf::Vector{SheafVertex}, λ::Float64 = .1, n_steps::Int = 10)  
+function simulate_distributed!(sheaf::Vector{SheafVertex}, λ::Float64=0.1, n_steps::Int=10)
     for _ in 1:n_steps
         @sync @distributed for i in 1:length(sheaf)  # Does this actually work, or are different processes getting different information?
             v = sheaf[i]
@@ -257,7 +259,7 @@ function simulate_distributed!(sheaf::Vector{SheafVertex}, λ::Float64 = .1, n_s
             v.z_update .= 0   # Fill with zeros to reset update
 
             # Compute updates
-            v.x_update +=  -ForwardDiff.gradient(v.f, v.x)
+            v.x_update += -ForwardDiff.gradient(v.f, v.x)
             for e in v.adj
                 v.x_update += xLaplacian(v, e)
                 v.z_update += zLaplacian(v, e)
@@ -281,7 +283,7 @@ end
 # Should be very straightforward
 
 mutable struct ThreadedSheaf
-    x::BlockArray{Float64} 
+    x::BlockArray{Float64}
     λ::BlockArray{Float64}
     f::Vector{Function}
     restriction_maps::BlockArray{Float64}  # Could be a sparse array
@@ -291,7 +293,7 @@ end
 
 
 # Constructor: no coboundary map given
-function ThreadedSheaf(V::Vector{Int}, E::Vector{Int}, f::Union{Vector{Function}, Nothing} = nothing)
+function ThreadedSheaf(V::Vector{Int}, E::Vector{Int}, f::Union{Vector{Function},Nothing}=nothing)
     f = f === nothing ? Function[] : f  # Set `f` to an empty vector if `nothing` was provided
     x = BlockArray{Float64}(zeros(sum(V), 1), V, [1])
     λ = BlockArray{Float64}(zeros(sum(V), 1), V, [1])
@@ -342,7 +344,7 @@ function is_global_section(s::ThreadedSheaf, v::Vector)
 end
 
 
-function simulate!(s::ThreadedSheaf, α::Float64 = .1, n_steps::Int = 1000)  # Uzawa's algorithm. Currently not very distributed.
+function simulate!(s::ThreadedSheaf, α::Float64=0.1, n_steps::Int=1000)  # Uzawa's algorithm. Currently not very distributed.
     L = laplacian(s)
     for _ in 1:n_steps
         # Gradient update step
@@ -351,7 +353,7 @@ function simulate!(s::ThreadedSheaf, α::Float64 = .1, n_steps::Int = 1000)  # U
         end
 
         # Laplacian multiply step
-        s.x +=  α * (-2 * L * s.x - L * s.λ)
+        s.x += α * (-2 * L * s.x - L * s.λ)
         s.λ += α * L * s.x
     end
 end
@@ -360,7 +362,7 @@ end
 
 abstract type OptimizationAlgorithm end
 
-struct Uzawas <: OptimizationAlgorithm 
+struct Uzawas <: OptimizationAlgorithm
     step_size::Float64
     max_iters::Float64
     epsilon::Float64 # Terminate if objective value decreases by less than epsilon in a given iteration

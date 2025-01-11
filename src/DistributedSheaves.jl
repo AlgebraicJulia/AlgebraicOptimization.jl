@@ -1,3 +1,7 @@
+module DistributedSheaves
+
+export random_distributed_sheaf, iterate_laplacian!, distance_from_consensus
+
 using Distributed
 using LinearAlgebra
 
@@ -10,15 +14,15 @@ function laplacian_step!(workers::Vector{Int}, node_refs::Vector{Future}, step_s
 
         # Compute updated state
         for (n, rm) in fetch(node_ref).neighbors
-            outgoing_edge_val = rm*x_old
+            outgoing_edge_val = rm * x_old
             incoming_edge_val = take!(fetch(node_ref).in_channels[n])
-            delta_x += rm'*(outgoing_edge_val - incoming_edge_val)
+            delta_x += rm' * (outgoing_edge_val - incoming_edge_val)
         end
-        x_new = x_old - step_size*delta_x
+        x_new = x_old - step_size * delta_x
 
         # Broadcast updated state to neighbors
         for (n, rm) in fetch(node_ref).neighbors
-            put!(fetch(node_ref).out_channels[n], rm*x_new)
+            put!(fetch(node_ref).out_channels[n], rm * x_new)
         end
 
         # Update local state
@@ -38,17 +42,17 @@ function random_distributed_sheaf(num_nodes, edge_probability, restriction_map_d
     @everywhere @eval using SparseArrays
     @everywhere include("src/SheafNodes.jl")
     @everywhere @eval using .SheafNodes
-    n,p = restriction_map_dimension, restriction_map_density
+    n, p = restriction_map_dimension, restriction_map_density
     coin()::Bool = rand() < edge_probability
 
     # Spawn sheaf nodes on every worker
     node_refs = Future[]
     for w in workers
-        push!(node_refs, @spawnat w DistributedSheafNode(w, n, 
-            Dict{Int32, SparseMatrixCSC{Float32, Int32}}(), # restriction maps
+        push!(node_refs, @spawnat w DistributedSheafNode(w, n,
+            Dict{Int32,SparseMatrixCSC{Float32,Int32}}(), # restriction maps
             #Dict{Int32, Matrix{Float32}}(),
-            Dict{Int32, RemoteChannel}(),                   # inbound channels
-            Dict{Int32, RemoteChannel}(), rand(n)))         # outbound channels, initial state
+            Dict{Int32,RemoteChannel}(),                   # inbound channels
+            Dict{Int32,RemoteChannel}(), rand(n)))         # outbound channels, initial state
     end
 
     # Add random sheaf edges
@@ -58,8 +62,8 @@ function random_distributed_sheaf(num_nodes, edge_probability, restriction_map_d
                 # This requires two restriction maps:
                 # i -- A --> e <-- B -- j
                 # A should live on proc i and B should live on proc j
-                Aref = @spawnat i sprand(n,n,p)
-                Bref = @spawnat j sprand(n,n,p)
+                Aref = @spawnat i sprand(n, n, p)
+                Bref = @spawnat j sprand(n, n, p)
                 #Aref = @spawnat i rand(n,n)
                 #Bref = @spawnat j rand(n,n)
 
@@ -71,23 +75,23 @@ function random_distributed_sheaf(num_nodes, edge_probability, restriction_map_d
                 j_to_i_channel = RemoteChannel(() -> Channel{Vector{Float32}}(1))
 
                 # Set the appropriate remote channels for each node and seed them with the initial values
-                remote_do(node_ref -> begin 
-                                        fetch(node_ref).in_channels[j] = j_to_i_channel 
-                                        fetch(node_ref).out_channels[j] = i_to_j_channel
-                                        put!(i_to_j_channel, fetch(Aref)*fetch(node_ref).x)
-                                      end, i, node_refs[i-1])
-                remote_do(node_ref -> begin 
-                                        fetch(node_ref).in_channels[i] = i_to_j_channel 
-                                        fetch(node_ref).out_channels[i] = j_to_i_channel
-                                        put!(j_to_i_channel, fetch(Bref)*fetch(node_ref).x)
-                                      end, j, node_refs[j-1])
+                remote_do(node_ref -> begin
+                        fetch(node_ref).in_channels[j] = j_to_i_channel
+                        fetch(node_ref).out_channels[j] = i_to_j_channel
+                        put!(i_to_j_channel, fetch(Aref) * fetch(node_ref).x)
+                    end, i, node_refs[i-1])
+                remote_do(node_ref -> begin
+                        fetch(node_ref).in_channels[i] = i_to_j_channel
+                        fetch(node_ref).out_channels[i] = j_to_i_channel
+                        put!(j_to_i_channel, fetch(Bref) * fetch(node_ref).x)
+                    end, j, node_refs[j-1])
             end
         end
     end
     return workers, node_refs
 end
 
-function distance_from_consensus(node_refs)
+function distance_from_consensus(node_refs::Vector{Future})
     @everywhere @eval using LinearAlgebra
     return @distributed (+) for nr in node_refs
         node_distance = 0.0
@@ -108,6 +112,8 @@ function iterate_laplacian!(workers, node_refs, step_size, num_iters)
         push!(distances, distance_from_consensus(node_refs))
     end
     return distances
+end
+
 end
 
 # Some tests
