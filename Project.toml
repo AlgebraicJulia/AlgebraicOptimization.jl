@@ -29,6 +29,7 @@ SuiteSparseMatrixCollection = "ac199af8-68bc-55b8-82c4-7abd6f96ed98"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [compat]
+BlockArrays = "1"
 Catlab = "0.16.10"
 ForwardDiff = "0.10.36, 1"
 Graphs = "1.12.0"
