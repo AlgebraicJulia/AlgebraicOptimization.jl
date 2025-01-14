@@ -1,10 +1,7 @@
 using Test
 using AlgebraicOptimization
 
-
-
-
-g = random_open_flowgraph(10, .2, 3)
+g = random_open_flowgraph(10, 0.2, 3)
 A = node_incidence_matrix(data(g))
 p = to_problem(g)
 o1 = Euler(gradient_flow(p), 0.01)
@@ -16,14 +13,14 @@ dual_sol2 = simulate(o2, zeros(10), 10)
 primal_sol1 = primal_solution(data(p), dual_sol1)
 primal_sol2 = primal_solution(data(p), dual_sol2)
 
-f(x) = sum([data(g).edge_costs[i](x[i]) for i in 1:nedges(data(g))]) + dual_sol1'*(A*x - data(g).flows)
+f(x) = sum([data(g).edge_costs[i](x[i]) for i in 1:nedges(data(g))]) + dual_sol1' * (A * x - data(g).flows)
 
 
 
 # Test flow graph composition
-g1 = random_open_flowgraph(10, .2, 2)
-g2 = random_open_flowgraph(10, .2, 3)
-g3 = random_open_flowgraph(10, .2, 3)
+g1 = random_open_flowgraph(10, 0.2, 2)
+g2 = random_open_flowgraph(10, 0.2, 3)
+g3 = random_open_flowgraph(10, 0.2, 3)
 
 g_comp = oapply(d, [g1, g2, g3])
 
@@ -49,11 +46,11 @@ o1 = dual_decomposition(g1, 0.1)
 o2 = dual_decomposition(g2, 0.1)
 o3 = dual_decomposition(g3, 0.1)
 
-o1 = Euler(gradient_flow(p1),γ)
-o2 = Euler(gradient_flow(p2),γ)
-o3 = Euler(gradient_flow(p3),γ)
+o1 = Euler(gradient_flow(p1), γ)
+o2 = Euler(gradient_flow(p2), γ)
+o3 = Euler(gradient_flow(p3), γ)
 
-comp_opt1 = oapply(OpenDiscreteOpt(), d, [o1,o2,o3])
+comp_opt1 = oapply(OpenDiscreteOpt(), d, [o1, o2, o3])
 comp_opt2 = dual_decomposition(g_comp, γ)
 
 res1 = simulate(comp_opt1, zeros(length(comp_opt1.S)), iters)
