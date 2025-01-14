@@ -284,7 +284,6 @@ This is primarily used for distributed Uzawa-type optimization algorithms. Based
 - `f::Vector{Function}`: Objective functions associated with vertices.
 - `restriction_maps::BlockArray{Float64}`: Restriction maps, stored as an `e × v` matrix.
 - `coboundary::BlockArray{Float64}`: Coboundary maps derived from the restriction maps.
-- `L::BlockArray{Float64}`: Laplacian matrix.
 """
 mutable struct MatrixSheaf
     x::BlockArray{Float64} 
@@ -341,7 +340,7 @@ Computes the coboundary map for a threaded sheaf. Negates the second non-zero bl
 """
 function coboundary_map(s::MatrixSheaf)
     # Iterate through the restriction_maps matrix and negate the second non-zero block in each row
-    coboundary = copy(s.restriction_maps)
+    coboundary = copy(s.restriction_maps)    
     for e in 1:blocksize(coboundary)[1]   # Iterate the block rows
         has_seen_block = false
         for v in 1:blocksize(coboundary)[2]
@@ -426,8 +425,8 @@ end
 
 
 function simulate!(s::MatrixSheaf, α::Float64 = .1, n_steps::Int = 1000)  # Uzawa's algorithm. Currently not very distributed.
-    s.coboundary = coboundary_map(s)   # Calculate the coboundary map based on restriction maps
-        for _ in 1:n_steps
+    make_coboundary(s)
+    for _ in 1:n_steps
         # Gradient update step
         Threads.@threads for v in 1:blocksize(s.x)[1]   # Iterate the vertices. This will be @threads.
             s.x[Block(v, 1)] += -ForwardDiff.gradient(s.f[v], s.x[Block(v, 1)]) * α  
@@ -449,8 +448,8 @@ function simulate_sequential!(s::MatrixSheaf, α::Float64 = .1, n_steps::Int = 1
         end
 
         # Laplacian multiply step
-        s.x +=  α * s.L * (-2 * s.x - s.λ)
-        s.λ += α * s.L * s.x
+        s.x +=  α * s.coboundary' * s.coboundary * (-2 * s.x - s.λ)
+        s.λ += α * s.coboundary' * s.coboundary * s.x
     end
 end
 
