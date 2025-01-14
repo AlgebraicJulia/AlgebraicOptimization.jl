@@ -282,10 +282,8 @@ function threaded_sheaf(s::MatrixSheaf)
         for v in 1:blocksize(s.restriction_maps)[2]
             if i == -1 && !(iszero(s.restriction_maps[Block(e, v)]))
                 i = v
-                println("i set to ", i)
             elseif !(iszero(s.restriction_maps[Block(e, v)]))
                 j = v
-                println("j set to ", j)
                 break
             end
         end
@@ -307,9 +305,6 @@ function threaded_sheaf(s::MatrixSheaf)
         put!(j_to_i_channel, B * nodes[j].x)
     end
 
-    
-            
-    
     return nodes
 end
 

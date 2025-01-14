@@ -1,7 +1,7 @@
 module CellularSheaves
 
 export CellularSheaf, add_map!, coboundary_map, laplacian, is_global_section, SheafObjective, apply_f, apply_f_with_stabilizer, apply_lagrangian_to_x, apply_lagrangian_to_z, simulate!,
-    SheafNode, simulate_distributed!, simulate_distributed_separate_steps!, SheafVertex, SheafEdge, xLaplacian, zLaplacian, MatrixSheaf, optimize!,
+    SheafNode, simulate_distributed!, simulate_distributed_separate_steps!, SheafVertex, SheafEdge, xLaplacian, zLaplacian, MatrixSheaf, optimize!, random_matrix_sheaf,
     OptimizationAlgorithm
 
 import Catlab: add_edge!
@@ -319,7 +319,7 @@ end
 """
     add_map!(s::MatrixSheaf, v::Int, e::Int, map::Matrix)
 
-Adds a restriction map to a threaded sheaf from vertex e to edge e.
+Adds a restriction map to a matrix sheaf from vertex e to edge e.
 
 # Arguments:
 - `s::MatrixSheaf`: The sheaf to which the map is added.
@@ -336,7 +336,7 @@ end
 """
     coboundary_map(s::MatrixSheaf) -> BlockArray{Float64}
 
-Computes the coboundary map for a threaded sheaf. Negates the second non-zero block in each row.
+Computes the coboundary map for a matrix sheaf. Negates the second non-zero block in each row.
 """
 function coboundary_map(s::MatrixSheaf)
     # Iterate through the restriction_maps matrix and negate the second non-zero block in each row
@@ -370,7 +370,7 @@ end
 """
     make_coboundary(s::MatrixSheaf)
 
-Updates the `coboundary` field of the threaded sheaf with the computed coboundary map based on the current restriction maps.
+Updates the `coboundary` field of the matrix sheaf with the computed coboundary map based on the current restriction maps.
 """
 function make_coboundary(s::MatrixSheaf)
     s.coboundary = coboundary_map(s)
@@ -390,9 +390,9 @@ end
 
 
 """
-    random_threaded_sheaf(V::Int, E::Int, dim::Int) -> MatrixSheaf
+    random_matrix_sheaf(V::Int, E::Int, dim::Int) -> MatrixSheaf
 
-Generates a random threaded sheaf with vertices, edges, and dimension.
+Generates a random matrix sheaf with vertices, edges, and dimension.
 
 # Arguments:
 - `V::Int`: Number of vertices.
@@ -400,9 +400,9 @@ Generates a random threaded sheaf with vertices, edges, and dimension.
 - `dim::Int`: Dimension of the stalks on every vertex and edge.
 
 # Returns:
-- `MatrixSheaf`: A randomly initialized threaded sheaf.
+- `MatrixSheaf`: A randomly initialized matrix sheaf.
 """
-function random_threaded_sheaf(V::Int, E::Int, dim::Int)
+function random_matrix_sheaf(V::Int, E::Int, dim::Int)
     random_sheaf = MatrixSheaf([dim for _ in 1:V], [dim for _ in 1:E])
 
     # Add random restriction maps
@@ -428,7 +428,7 @@ function simulate!(s::MatrixSheaf, α::Float64 = .1, n_steps::Int = 1000)  # Uza
     make_coboundary(s)
     for _ in 1:n_steps
         # Gradient update step
-        Threads.@threads for v in 1:blocksize(s.x)[1]   # Iterate the vertices. This will be @threads.
+        Threads.@threads for v in 1:blocksize(s.x)[1]   # Iterate the vertices
             s.x[Block(v, 1)] += -ForwardDiff.gradient(s.f[v], s.x[Block(v, 1)]) * α  
             # TODO: Turn ForwardDiff into ReverseDiff
         end

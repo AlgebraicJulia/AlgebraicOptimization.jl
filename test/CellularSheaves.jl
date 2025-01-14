@@ -188,12 +188,6 @@ sheaf_2.f = [x -> x[1]^2 + x[2]^2, x -> (x[1] - 2)^2 + (x[2] -2)^2]
 simulate!(sheaf_2)
 
 @test sheaf_2.x ≈ [0; 1; 2; 1]  atol=1e-3  
-threaded_sheaf(sheaf_2)
-sheaf_2.restriction_maps
-
-using BlockArrays
-typeof(vec(sheaf_2.x[Block(1, 1)]))
-
 
 
 # Next steps: 10/28/24
