@@ -1,7 +1,7 @@
 module CellularSheaves
 
 export CellularSheaf, add_map!, coboundary_map, laplacian, is_global_section, SheafObjective, apply_f, apply_f_with_stabilizer, apply_lagrangian_to_x, apply_lagrangian_to_z, simulate!,
-    SheafNode, simulate_distributed!, simulate_distributed_separate_steps!, SheafVertex, SheafEdge, xLaplacian, zLaplacian, ThreadedSheaf, optimize!,
+    SheafNode, simulate_distributed!, simulate_distributed_separate_steps!, SheafVertex, SheafEdge, xLaplacian, zLaplacian, MatrixSheaf, optimize!,
     OptimizationAlgorithm
 
 import Catlab: add_edge!
@@ -273,7 +273,7 @@ end
 
 
 """    
-    mutable struct ThreadedSheaf
+    mutable struct MatrixSheaf
 
 A data structure representing a cellular sheaf, which includes primal and dual variables, objective functions, and restriction maps. 
 This is primarily used for distributed Uzawa-type optimization algorithms. Based on shared memory and multithreading.
@@ -286,7 +286,7 @@ This is primarily used for distributed Uzawa-type optimization algorithms. Based
 - `coboundary::BlockArray{Float64}`: Coboundary maps derived from the restriction maps.
 - `L::BlockArray{Float64}`: Laplacian matrix.
 """
-mutable struct ThreadedSheaf
+mutable struct MatrixSheaf
     x::BlockArray{Float64} 
     λ::BlockArray{Float64}
     f::Vector{Function}
@@ -298,48 +298,48 @@ end
 
 
 """    
-    ThreadedSheaf(V::Vector{Int}, E::Vector{Int}, f::Union{Vector{Function}, Nothing} = nothing)
+    MatrixSheaf(V::Vector{Int}, E::Vector{Int}, f::Union{Vector{Function}, Nothing} = nothing)
 
-Constructs a `ThreadedSheaf` with specified vertex sizes `V` and edge sizes `E`. If objective functions `f` are not provided, an empty vector is used.
+Constructs a `MatrixSheaf` with specified vertex sizes `V` and edge sizes `E`. If objective functions `f` are not provided, an empty vector is used.
 
 # Arguments:
 - `V::Vector{Int}`: Dimensions of stalks corresponding to vertices.
 - `E::Vector{Int}`: Dimensions of stalks corresponding to edges.
 - `f::Union{Vector{Function}, Nothing}`: Optional vector of objective functions.
 """
-function ThreadedSheaf(V::Vector{Int}, E::Vector{Int}, f::Union{Vector{Function}, Nothing} = nothing)
+function MatrixSheaf(V::Vector{Int}, E::Vector{Int}, f::Union{Vector{Function}, Nothing} = nothing)
     f = f === nothing ? Function[] : f  # Set `f` to an empty vector if `nothing` was provided
     x = BlockArray{Float64}(ones(sum(V), 1), V, [1])
     λ = BlockArray{Float64}(zeros(sum(V), 1), V, [1])
     restriction_maps = BlockArray{Float64}(zeros(sum(E), sum(V)), E, V)
-    return ThreadedSheaf(x, λ, f, restriction_maps, restriction_maps)
+    return MatrixSheaf(x, λ, f, restriction_maps, restriction_maps)
 end
 
 
 
 """
-    add_map!(s::ThreadedSheaf, v::Int, e::Int, map::Matrix)
+    add_map!(s::MatrixSheaf, v::Int, e::Int, map::Matrix)
 
 Adds a restriction map to a threaded sheaf from vertex e to edge e.
 
 # Arguments:
-- `s::ThreadedSheaf`: The sheaf to which the map is added.
+- `s::MatrixSheaf`: The sheaf to which the map is added.
 - `v::Int`: Index of the vertex block.
 - `e::Int`: Index of the edge block.
 - `map::Matrix`: The restriction map to insert.
 """
-function add_map!(s::ThreadedSheaf, v::Int, e::Int, map::Matrix{})
+function add_map!(s::MatrixSheaf, v::Int, e::Int, map::Matrix{})
     s.restriction_maps[Block(e, v)] = map
 end
 
 
 
 """
-    coboundary_map(s::ThreadedSheaf) -> BlockArray{Float64}
+    coboundary_map(s::MatrixSheaf) -> BlockArray{Float64}
 
 Computes the coboundary map for a threaded sheaf. Negates the second non-zero block in each row.
 """
-function coboundary_map(s::ThreadedSheaf)
+function coboundary_map(s::MatrixSheaf)
     # Iterate through the restriction_maps matrix and negate the second non-zero block in each row
     coboundary = copy(s.restriction_maps)
     for e in 1:blocksize(coboundary)[1]   # Iterate the block rows
@@ -359,39 +359,39 @@ end
 
 
 """
-    laplacian(s::ThreadedSheaf) -> BlockArray{Float64}
+    laplacian(s::MatrixSheaf) -> BlockArray{Float64}
 
 Computes the sheaf Laplacian matrix as the product of the transpose of the coboundary map and the coboundary map itself.
 """
-function laplacian(s::ThreadedSheaf)
+function laplacian(s::MatrixSheaf)
     return coboundary_map(s)' * coboundary_map(s)
 end
 
 
 """
-    make_coboundary(s::ThreadedSheaf)
+    make_coboundary(s::MatrixSheaf)
 
 Updates the `coboundary` field of the threaded sheaf with the computed coboundary map based on the current restriction maps.
 """
-function make_coboundary(s::ThreadedSheaf)
+function make_coboundary(s::MatrixSheaf)
     s.coboundary = coboundary_map(s)
 end
 
 
 
 """
-    is_global_section(s::ThreadedSheaf; tol::Float64 = 1e-8) -> Bool
+    is_global_section(s::MatrixSheaf; tol::Float64 = 1e-8) -> Bool
 
 Checks if the sheaf is a global section by verifying if the product of the Laplacian and primal variables is approximately zero.
 """
-function is_global_section(s::ThreadedSheaf; tol::Float64 = 1e-8)
+function is_global_section(s::MatrixSheaf; tol::Float64 = 1e-8)
     # Check if the product of the Laplacian and s.x is approximately zero within the given tolerance
     return isapprox(s.coboundary' * s.coboundary * s.x, zero(s.x); atol=tol)
 end
 
 
 """
-    random_threaded_sheaf(V::Int, E::Int, dim::Int) -> ThreadedSheaf
+    random_threaded_sheaf(V::Int, E::Int, dim::Int) -> MatrixSheaf
 
 Generates a random threaded sheaf with vertices, edges, and dimension.
 
@@ -401,10 +401,10 @@ Generates a random threaded sheaf with vertices, edges, and dimension.
 - `dim::Int`: Dimension of the stalks on every vertex and edge.
 
 # Returns:
-- `ThreadedSheaf`: A randomly initialized threaded sheaf.
+- `MatrixSheaf`: A randomly initialized threaded sheaf.
 """
 function random_threaded_sheaf(V::Int, E::Int, dim::Int)
-    random_sheaf = ThreadedSheaf([dim for _ in 1:V], [dim for _ in 1:E])
+    random_sheaf = MatrixSheaf([dim for _ in 1:V], [dim for _ in 1:E])
 
     # Add random restriction maps
     for e in 1:E
@@ -425,7 +425,7 @@ function random_threaded_sheaf(V::Int, E::Int, dim::Int)
 end
 
 
-function simulate!(s::ThreadedSheaf, α::Float64 = .1, n_steps::Int = 1000)  # Uzawa's algorithm. Currently not very distributed.
+function simulate!(s::MatrixSheaf, α::Float64 = .1, n_steps::Int = 1000)  # Uzawa's algorithm. Currently not very distributed.
     s.coboundary = coboundary_map(s)   # Calculate the coboundary map based on restriction maps
         for _ in 1:n_steps
         # Gradient update step
@@ -440,7 +440,7 @@ function simulate!(s::ThreadedSheaf, α::Float64 = .1, n_steps::Int = 1000)  # U
     end
 end
 
-function simulate_sequential!(s::ThreadedSheaf, α::Float64 = .1, n_steps::Int = 1000)  # Uzawa's algorithm. Currently not very distributed.
+function simulate_sequential!(s::MatrixSheaf, α::Float64 = .1, n_steps::Int = 1000)  # Uzawa's algorithm. Currently not very distributed.
     s.coboundary = coboundary_map(s)   # Calculate the coboundary map based on restriction maps
     for _ in 1:n_steps
         # Gradient update step
