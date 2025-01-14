@@ -1,6 +1,9 @@
 using Test
 
 using AlgebraicOptimization
+using Random
+
+Random.seed!(1234)
 
 @testset "Open Optimization Problems" begin
   include("Objectives.jl")
