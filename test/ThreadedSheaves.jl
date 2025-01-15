@@ -18,7 +18,7 @@ loss = iterate_laplacian!(nodes, convergence_threshold)
 random_matrix_s = random_matrix_sheaf(10, 4, 5)
 random_threaded = threaded_sheaf(random_matrix_s)
 @test size(random_threaded)[1] == 10  # Check number of vertices matches
-@test random_threaded[1].x == vec(random_matrix_s.x[Block(1, 1)])  # Check that edge dimension matches
+@test random_threaded[1].x == vec(random_matrix_s.x[BlockArrays.Block(1, 1)])  # Check that edge dimension matches
 
 # Converting a MatrixSheaf with nonuniform dimension to an array of ThreadedSheaves
 
@@ -31,4 +31,4 @@ add_map!(non_uniform_matrix_sheaf, 3, 2, [5 5 5; 6 6 6])
 non_uniform_threaded_sheaf = threaded_sheaf(non_uniform_matrix_sheaf)
 
 @test size(non_uniform_threaded_sheaf)[1] == 3  # Check number of vertices matches
-@test non_uniform_threaded_sheaf[2].x == vec(non_uniform_matrix_sheaf.x[Block(2, 1)])  # Check that edge dimension matches
+@test non_uniform_threaded_sheaf[2].x == vec(non_uniform_matrix_sheaf.x[BlockArrays.Block(2, 1)])  # Check that edge dimension matches
