@@ -178,9 +178,9 @@ simulate_distributed!(distributed_sheaf_4, .1, 100)
 
 
 
-# New test cases: ThreadedSheafs, shared memory
+# New test cases: MatrixSheafs, shared memory
 
-sheaf_2 = ThreadedSheaf([2, 2], [1])
+sheaf_2 = MatrixSheaf([2, 2], [1])
 add_map!(sheaf_2, 1, 1, [0 1])
 add_map!(sheaf_2, 2, 1, [0 1]) 
 
@@ -188,8 +188,6 @@ sheaf_2.f = [x -> x[1]^2 + x[2]^2, x -> (x[1] - 2)^2 + (x[2] -2)^2]
 simulate!(sheaf_2)
 
 @test sheaf_2.x ≈ [0; 1; 2; 1]  atol=1e-3  
-
-
 
 
 # Next steps: 10/28/24
