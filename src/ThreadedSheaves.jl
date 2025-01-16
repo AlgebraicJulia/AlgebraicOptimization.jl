@@ -1,6 +1,6 @@
 module ThreadedSheaves
 
-export random_threaded_sheaf, random_initialization, initialize!, compute_clusters
+export random_threaded_sheaf, random_initialization, initialize!, compute_clusters, threaded_sheaf
 
 import ..DistributedSheaves: iterate_laplacian!, distance_from_consensus
 
@@ -10,6 +10,9 @@ using SparseArrays
 using LinearAlgebra
 using Graphs
 using Metis
+using ..CellularSheaves
+using BlockArrays
+
 
 function local_laplacian_step!(node::ThreadedSheafNode, step_size)
     x_old = node.x
@@ -453,5 +456,53 @@ function initialize!(nodes::Vector{ThreadedSheafNode}, xs)
         end
     end
 end
+
+function threaded_sheaf(s::MatrixSheaf)
+
+    nodes = ThreadedSheafNode[]
+
+    for i in 1:blocksize(s.x)[1]
+        push!(nodes, ThreadedSheafNode(i, size(s.x[Block(i, 1)])[1],
+            Dict{Int32,SparseMatrixCSC{Float32,Int32}}(),
+            Dict{Int32,Channel}(),
+            Dict{Int32,Channel}(), vec(s.x[Block(i, 1)])))
+    end
+
+
+    # Iterate edges and connect the vertices along each edge
+
+    for e in 1:blocksize(s.restriction_maps)[1]   # Iterate the block rows
+        i = -1
+        j = -1
+        for v in 1:blocksize(s.restriction_maps)[2]
+            if i == -1 && !(iszero(s.restriction_maps[Block(e, v)]))
+                i = v
+            elseif !(iszero(s.restriction_maps[Block(e, v)]))
+                j = v
+                break
+            end
+        end
+        A = s.restriction_maps[Block(e, i)]
+        B = s.restriction_maps[Block(e, j)]
+
+        nodes[i].neighbors[j] = A
+        nodes[j].neighbors[i] = B
+
+        i_to_j_channel = Channel{Vector{Float32}}(2)
+        j_to_i_channel = Channel{Vector{Float32}}(2)
+
+        nodes[i].in_channels[j] = j_to_i_channel
+        nodes[i].out_channels[j] = i_to_j_channel
+        put!(i_to_j_channel, A * nodes[i].x)
+
+        nodes[j].in_channels[i] = i_to_j_channel
+        nodes[j].out_channels[i] = j_to_i_channel
+        put!(j_to_i_channel, B * nodes[j].x)
+    end
+
+    return nodes
+end
+
+
 
 end

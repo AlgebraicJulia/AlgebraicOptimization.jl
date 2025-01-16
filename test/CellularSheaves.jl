@@ -153,14 +153,14 @@ simulate_distributed!(distributed_sheaf_2, .1, 1000)
 
 # Constant sheaf
 
-sheaf_node_6 = SheafNode(x -> x[1]^2, [3, 4], [0, 0])
-sheaf_node_7 = SheafNode(x -> (x[2] - 3)^2, [-2, 5], [0, 0])   
-add_edge!(sheaf_node_6, sheaf_node_7, [1 0; 0 1], [1 0; 0 1])   # Identity matrix since this is the common sheaf
+sheaf_node_6 = SheafNode(x -> x[1]^2 + (x[2] - 3)^2, [3, 4], [0, 0])
+sheaf_node_7 = SheafNode(x -> x[1]^2 + (x[2] - 3)^2, [-2, 5], [0, 0])   
+add_edge!(sheaf_node_6, sheaf_node_7, [1 0; 0 1], [1 0; 0 1])   # Identity matrix since this is the constant sheaf
 
 distributed_sheaf_3 = [sheaf_node_6, sheaf_node_7]
-simulate_distributed_separate_steps!(distributed_sheaf_3, .1, 100)
+simulate_distributed_separate_steps!(distributed_sheaf_3, .01, 1000)
 
-@test sheaf_node_6.x[1] ≈ 0  atol=1e-3
+@test sheaf_node_6.x[1] ≈ 0  atol=1e-3            # TODO: These are the bad tests
 @test sheaf_node_6.x[2] ≈ 3  atol=1e-3
 
 
@@ -178,9 +178,9 @@ simulate_distributed!(distributed_sheaf_4, .1, 100)
 
 
 
-# New test cases: ThreadedSheafs, shared memory
+# New test cases: MatrixSheafs, shared memory
 
-sheaf_2 = ThreadedSheaf([2, 2], [1])
+sheaf_2 = MatrixSheaf([2, 2], [1])
 add_map!(sheaf_2, 1, 1, [0 1])
 add_map!(sheaf_2, 2, 1, [0 1]) 
 
@@ -188,8 +188,6 @@ sheaf_2.f = [x -> x[1]^2 + x[2]^2, x -> (x[1] - 2)^2 + (x[2] -2)^2]
 simulate!(sheaf_2)
 
 @test sheaf_2.x ≈ [0; 1; 2; 1]  atol=1e-3  
-
-
 
 
 # Next steps: 10/28/24

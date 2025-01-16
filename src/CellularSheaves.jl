@@ -1,7 +1,7 @@
 module CellularSheaves
 
 export CellularSheaf, add_map!, coboundary_map, laplacian, is_global_section, SheafObjective, apply_f, apply_f_with_stabilizer, apply_lagrangian_to_x, apply_lagrangian_to_z, simulate!,
-    SheafNode, simulate_distributed!, simulate_distributed_separate_steps!, SheafVertex, SheafEdge, xLaplacian, zLaplacian, ThreadedSheaf, optimize!,
+    SheafNode, simulate_distributed!, simulate_distributed_separate_steps!, SheafVertex, SheafEdge, xLaplacian, zLaplacian, MatrixSheaf, optimize!, random_matrix_sheaf,
     OptimizationAlgorithm
 
 import Catlab: add_edge!
@@ -272,54 +272,75 @@ end
 
 
 
+"""    
+    mutable struct MatrixSheaf
 
+A data structure representing a cellular sheaf, which includes primal and dual variables, objective functions, and restriction maps. 
+This is primarily used for distributed Uzawa-type optimization algorithms. Based on shared memory and multithreading.
 
-
-
-
-
-
-# New approach: Threading & shared memory
-# Should be very straightforward
-
-mutable struct ThreadedSheaf
-    x::BlockArray{Float64}
+# Fields:
+- `x::BlockArray{Float64}`: Primal variables.
+- `λ::BlockArray{Float64}`: Dual variables (Lagrange multipliers).
+- `f::Vector{Function}`: Objective functions associated with vertices.
+- `restriction_maps::BlockArray{Float64}`: Restriction maps, stored as an `e × v` matrix.
+- `coboundary::BlockArray{Float64}`: Coboundary maps derived from the restriction maps.
+"""
+mutable struct MatrixSheaf
+    x::BlockArray{Float64} 
     λ::BlockArray{Float64}
     f::Vector{Function}
-    restriction_maps::BlockArray{Float64}  # Could be a sparse array
+    restriction_maps::BlockArray{Float64}  # Could be a sparse array. This is an e * v matrix.
+    coboundary::BlockArray{Float64}
 end
 
 
 
 
-# Constructor: no coboundary map given
-function ThreadedSheaf(V::Vector{Int}, E::Vector{Int}, f::Union{Vector{Function},Nothing}=nothing)
+"""    
+    MatrixSheaf(V::Vector{Int}, E::Vector{Int}, f::Union{Vector{Function}, Nothing} = nothing)
+
+Constructs a `MatrixSheaf` with specified vertex dimensions `V` and edge dimensions `E`. If objective functions `f` are not provided, an empty vector is used.
+
+# Arguments:
+- `V::Vector{Int}`: Dimensions of stalks corresponding to vertices.
+- `E::Vector{Int}`: Dimensions of stalks corresponding to edges.
+- `f::Union{Vector{Function}, Nothing}`: Optional vector of objective functions.
+"""
+function MatrixSheaf(V::Vector{Int}, E::Vector{Int}, f::Union{Vector{Function}, Nothing} = nothing)
     f = f === nothing ? Function[] : f  # Set `f` to an empty vector if `nothing` was provided
-    x = BlockArray{Float64}(zeros(sum(V), 1), V, [1])
+    x = BlockArray{Float64}(ones(sum(V), 1), V, [1])
     λ = BlockArray{Float64}(zeros(sum(V), 1), V, [1])
     restriction_maps = BlockArray{Float64}(zeros(sum(E), sum(V)), E, V)
-    return ThreadedSheaf(x, λ, f, restriction_maps)
+    return MatrixSheaf(x, λ, f, restriction_maps, restriction_maps)
 end
 
 
 
+"""
+    add_map!(s::MatrixSheaf, v::Int, e::Int, map::Matrix)
 
+Adds a restriction map to a matrix sheaf from vertex e to edge e.
 
-# # Constructor: no coboundary map given, constant dimension
-# function CellularSheaf(num_V::Int, num_E::Int, max_dimension::Int)
-#     V = fill(max_dimension, num_V)  # E blocks of N rows each
-#     E = fill(max_dimension, num_E)  # V blocks of N columns each
-#     return CellularSheaf(V, E)
-# end
-
-
-function add_map!(s::ThreadedSheaf, v::Int, e::Int, map::Matrix{})
+# Arguments:
+- `s::MatrixSheaf`: The sheaf to which the map is added.
+- `v::Int`: Index of the vertex block.
+- `e::Int`: Index of the edge block.
+- `map::Matrix`: The restriction map to insert.
+"""
+function add_map!(s::MatrixSheaf, v::Int, e::Int, map::Matrix{})
     s.restriction_maps[Block(e, v)] = map
 end
 
-function coboundary_map(s::ThreadedSheaf)
+
+
+"""
+    coboundary_map(s::MatrixSheaf) -> BlockArray{Float64}
+
+Computes the coboundary map for a matrix sheaf. Negates the second non-zero block in each row.
+"""
+function coboundary_map(s::MatrixSheaf)
     # Iterate through the restriction_maps matrix and negate the second non-zero block in each row
-    coboundary = copy(s.restriction_maps)
+    coboundary = copy(s.restriction_maps)    
     for e in 1:blocksize(coboundary)[1]   # Iterate the block rows
         has_seen_block = false
         for v in 1:blocksize(coboundary)[2]
@@ -333,30 +354,156 @@ function coboundary_map(s::ThreadedSheaf)
     end
     return coboundary
 end
+# TODO: Just store the coboundary_map. Also, that should definitely be sparse! Nice.
 
 
-function laplacian(s::ThreadedSheaf)
+"""
+    laplacian(s::MatrixSheaf) -> BlockArray{Float64}
+
+Computes the sheaf Laplacian matrix as the product of the transpose of the coboundary map and the coboundary map itself.
+"""
+function laplacian(s::MatrixSheaf)
     return coboundary_map(s)' * coboundary_map(s)
 end
 
-function is_global_section(s::ThreadedSheaf, v::Vector)
-    return iszero(laplacian(s) * v)      # This may only work if the graph underlying s is connected
+
+"""
+    make_coboundary(s::MatrixSheaf)
+
+Updates the `coboundary` field of the matrix sheaf with the computed coboundary map based on the current restriction maps.
+"""
+function make_coboundary(s::MatrixSheaf)
+    s.coboundary = coboundary_map(s)
 end
 
 
-function simulate!(s::ThreadedSheaf, α::Float64=0.1, n_steps::Int=1000)  # Uzawa's algorithm. Currently not very distributed.
-    L = laplacian(s)
+
+"""
+    is_global_section(s::MatrixSheaf; tol::Float64 = 1e-8) -> Bool
+
+Checks if the sheaf is a global section by verifying if the product of the Laplacian and primal variables is approximately zero.
+"""
+function is_global_section(s::MatrixSheaf; tol::Float64 = 1e-8)
+    # Check if the product of the Laplacian and s.x is approximately zero within the given tolerance
+    return isapprox(s.coboundary' * s.coboundary * s.x, zero(s.x); atol=tol)
+end
+
+
+"""
+    random_matrix_sheaf(V::Int, E::Int, dim::Int) -> MatrixSheaf
+
+Generates a random matrix sheaf with vertices, edges, and dimension.
+
+# Arguments:
+- `V::Int`: Number of vertices.
+- `E::Int`: Number of edges.
+- `dim::Int`: Dimension of the stalks on every vertex and edge.
+
+# Returns:
+- `MatrixSheaf`: A randomly initialized matrix sheaf.
+"""
+function random_matrix_sheaf(V::Int, E::Int, dim::Int)
+    random_sheaf = MatrixSheaf([dim for _ in 1:V], [dim for _ in 1:E])
+
+    # Add random restriction maps
+    for e in 1:E
+        u = rand(1:V)
+        w = rand(1:V)
+        while w == u
+            w = rand(1:V)
+        end
+        add_map!(random_sheaf, u, e, rand(dim, dim))
+        add_map!(random_sheaf, w, e, rand(dim, dim))
+    end
+
+    # Add random objective functions
+    random_sheaf.f = [x -> only(x' * Q * x + b * x) for _ in 1:V for Q = [rand(dim, dim)], b = [rand(1, dim)]]   # TODO: Q is positive semidefinite. Q = Q^T Q
+    # TODO: Vary the dimensions
+    # TODO: Use Catlab's random graph function. Take a graph and add random restriction maps
+    return random_sheaf
+end
+
+# function random_matrix_sheaf(num_nodes, edge_probability, restriction_map_dimension, restriction_map_density)
+#     coin()::Bool = rand() < edge_probability
+#     n, p = restriction_map_dimension, restriction_map_density
+    
+#     random_sheaf = MatrixSheaf(n * ones(num_nodes), [])
+
+#     for i in 1:num_nodes
+#         for j in i+1:num_nodes
+#             if coin()
+#                 A = sprand(n, n, p)
+#                 B = sprand(n, n, p)
+
+
+#                 # push!(random_sheaf.)     Issue: we need to know the number of edges we're working with before constructing our random-sheaf because we don't easily have a way to add rows to that matrix
+#                 # But maybe we should...
+
+
+#                 nodes[i].neighbors[j] = A
+#                 nodes[j].neighbors[i] = B
+
+#                 i_to_j_channel = Channel{Vector{Float32}}(2)
+#                 j_to_i_channel = Channel{Vector{Float32}}(2)
+
+#                 nodes[i].in_channels[j] = j_to_i_channel
+#                 nodes[i].out_channels[j] = i_to_j_channel
+#                 put!(i_to_j_channel, A * nodes[i].x)
+
+#                 nodes[j].in_channels[i] = i_to_j_channel
+#                 nodes[j].out_channels[i] = j_to_i_channel
+#                 put!(j_to_i_channel, B * nodes[j].x)
+#             end
+#         end
+#     end
+#     return nodes
+# end
+
+
+
+
+
+
+
+
+
+
+
+function simulate!(s::MatrixSheaf, α::Float64 = .1, n_steps::Int = 1000)  # Uzawa's algorithm. Currently not very distributed.
+    make_coboundary(s)
     for _ in 1:n_steps
         # Gradient update step
-        Threads.@threads for v in 1:blocksize(s.x)[1]   # Iterate the vertices. This will be @threads.
-            s.x[Block(v, 1)] += -ForwardDiff.gradient(s.f[v], s.x[Block(v, 1)]) * α
+        Threads.@threads for v in 1:blocksize(s.x)[1]   # Iterate the vertices
+            s.x[Block(v, 1)] += -ForwardDiff.gradient(s.f[v], s.x[Block(v, 1)]) * α  
+            # TODO: Turn ForwardDiff into ReverseDiff
         end
 
         # Laplacian multiply step
-        s.x += α * (-2 * L * s.x - L * s.λ)
-        s.λ += α * L * s.x
+        s.x +=  α * (-2 * s.coboundary' * s.coboundary * s.x - s.coboundary' * s.coboundary * s.λ)
+        s.λ += α * s.coboundary' * s.coboundary * s.x
     end
 end
+
+function simulate_sequential!(s::MatrixSheaf, α::Float64 = .1, n_steps::Int = 1000)  # Uzawa's algorithm. Currently not very distributed.
+    s.coboundary = coboundary_map(s)   # Calculate the coboundary map based on restriction maps
+    for _ in 1:n_steps
+        # Gradient update step
+        for v in 1:blocksize(s.x)[1]   # Iterate the vertices. No @threads here.
+            s.x[Block(v, 1)] += -ForwardDiff.gradient(s.f[v], s.x[Block(v, 1)]) * α   # TODO: Research faster gradient methods
+        end
+
+        # Laplacian multiply step
+        s.x +=  α * s.coboundary' * s.coboundary * (-2 * s.x - s.λ)
+        s.λ += α * s.coboundary' * s.coboundary * s.x
+    end
+end
+
+# Diagonal dominant
+# Add stuff to the diagonal (+xI)   smallest abs. value of the row sum of a symmetric matrix -> add that to the diagonal
+
+
+
+
 
 # Unified interface to optimize sheaf objectives using different algorithmic backends
 
