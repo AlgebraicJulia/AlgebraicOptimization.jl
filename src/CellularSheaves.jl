@@ -2,9 +2,9 @@ module CellularSheaves
 
 export CellularSheaf, add_map!, coboundary_map, laplacian, is_global_section, SheafObjective, apply_f, apply_f_with_stabilizer, apply_lagrangian_to_x, apply_lagrangian_to_z, simulate!,
     SheafNode, simulate_distributed!, simulate_distributed_separate_steps!, SheafVertex, SheafEdge, xLaplacian, zLaplacian, MatrixSheaf, optimize!, random_matrix_sheaf,
-    OptimizationAlgorithm, add_edge!
+    OptimizationAlgorithm
 
-# import Catlab: add_edge!
+import Catlab: add_edge!
 
 using BlockArrays
 using ForwardDiff
