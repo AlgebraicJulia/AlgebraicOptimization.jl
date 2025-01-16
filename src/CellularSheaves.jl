@@ -2,9 +2,9 @@ module CellularSheaves
 
 export CellularSheaf, add_map!, coboundary_map, laplacian, is_global_section, SheafObjective, apply_f, apply_f_with_stabilizer, apply_lagrangian_to_x, apply_lagrangian_to_z, simulate!,
     SheafNode, simulate_distributed!, simulate_distributed_separate_steps!, SheafVertex, SheafEdge, xLaplacian, zLaplacian, MatrixSheaf, optimize!, random_matrix_sheaf,
-    OptimizationAlgorithm
+    OptimizationAlgorithm, add_edge!
 
-import Catlab: add_edge!
+# import Catlab: add_edge!
 
 using BlockArrays
 using ForwardDiff
@@ -299,7 +299,7 @@ end
 """    
     MatrixSheaf(V::Vector{Int}, E::Vector{Int}, f::Union{Vector{Function}, Nothing} = nothing)
 
-Constructs a `MatrixSheaf` with specified vertex sizes `V` and edge sizes `E`. If objective functions `f` are not provided, an empty vector is used.
+Constructs a `MatrixSheaf` with specified vertex dimensions `V` and edge dimensions `E`. If objective functions `f` are not provided, an empty vector is used.
 
 # Arguments:
 - `V::Vector{Int}`: Dimensions of stalks corresponding to vertices.
@@ -422,6 +422,51 @@ function random_matrix_sheaf(V::Int, E::Int, dim::Int)
     # TODO: Use Catlab's random graph function. Take a graph and add random restriction maps
     return random_sheaf
 end
+
+# function random_matrix_sheaf(num_nodes, edge_probability, restriction_map_dimension, restriction_map_density)
+#     coin()::Bool = rand() < edge_probability
+#     n, p = restriction_map_dimension, restriction_map_density
+    
+#     random_sheaf = MatrixSheaf(n * ones(num_nodes), [])
+
+#     for i in 1:num_nodes
+#         for j in i+1:num_nodes
+#             if coin()
+#                 A = sprand(n, n, p)
+#                 B = sprand(n, n, p)
+
+
+#                 # push!(random_sheaf.)     Issue: we need to know the number of edges we're working with before constructing our random-sheaf because we don't easily have a way to add rows to that matrix
+#                 # But maybe we should...
+
+
+#                 nodes[i].neighbors[j] = A
+#                 nodes[j].neighbors[i] = B
+
+#                 i_to_j_channel = Channel{Vector{Float32}}(2)
+#                 j_to_i_channel = Channel{Vector{Float32}}(2)
+
+#                 nodes[i].in_channels[j] = j_to_i_channel
+#                 nodes[i].out_channels[j] = i_to_j_channel
+#                 put!(i_to_j_channel, A * nodes[i].x)
+
+#                 nodes[j].in_channels[i] = i_to_j_channel
+#                 nodes[j].out_channels[i] = j_to_i_channel
+#                 put!(j_to_i_channel, B * nodes[j].x)
+#             end
+#         end
+#     end
+#     return nodes
+# end
+
+
+
+
+
+
+
+
+
 
 
 function simulate!(s::MatrixSheaf, α::Float64 = .1, n_steps::Int = 1000)  # Uzawa's algorithm. Currently not very distributed.
