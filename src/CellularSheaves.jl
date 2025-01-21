@@ -9,6 +9,7 @@ import Catlab: add_edge!
 using BlockArrays
 using ForwardDiff
 using Distributed
+using SparseArrays
 
 
 struct CellularSheaf
@@ -327,7 +328,7 @@ Adds a restriction map to a matrix sheaf from vertex e to edge e.
 - `e::Int`: Index of the edge block.
 - `map::Matrix`: The restriction map to insert.
 """
-function add_map!(s::MatrixSheaf, v::Int, e::Int, map::Matrix{})
+function add_map!(s::MatrixSheaf, v::Int, e::Int, map)
     s.restriction_maps[Block(e, v)] = map
 end
 
@@ -423,48 +424,39 @@ function random_matrix_sheaf(V::Int, E::Int, dim::Int)
     return random_sheaf
 end
 
-# function random_matrix_sheaf(num_nodes, edge_probability, restriction_map_dimension, restriction_map_density)
-#     coin()::Bool = rand() < edge_probability
-#     n, p = restriction_map_dimension, restriction_map_density
+
+
+# Erdos-Reyni random graph: fixed probability that each pair of vertices has a corresponding edge.
+function random_matrix_sheaf(num_nodes, edge_probability, restriction_map_dimension, restriction_map_density)
+    coin()::Bool = rand() < edge_probability
+    n, p = restriction_map_dimension, restriction_map_density
     
-#     random_sheaf = MatrixSheaf(n * ones(num_nodes), [])
+    random_sheaf = MatrixSheaf(n * ones(Int, num_nodes), n * ones(Int, num_nodes * (num_nodes - 1) ÷ 2))
 
-#     for i in 1:num_nodes
-#         for j in i+1:num_nodes
-#             if coin()
-#                 A = sprand(n, n, p)
-#                 B = sprand(n, n, p)
+    edge = 0
 
+    for i in 1:num_nodes
+        for j in i+1:num_nodes
+            if coin()
+                edge += 1
 
-#                 # push!(random_sheaf.)     Issue: we need to know the number of edges we're working with before constructing our random-sheaf because we don't easily have a way to add rows to that matrix
-#                 # But maybe we should...
+                # A = rand(n, n)
+                # B = rand(n, n)
 
-
-#                 nodes[i].neighbors[j] = A
-#                 nodes[j].neighbors[i] = B
-
-#                 i_to_j_channel = Channel{Vector{Float32}}(2)
-#                 j_to_i_channel = Channel{Vector{Float32}}(2)
-
-#                 nodes[i].in_channels[j] = j_to_i_channel
-#                 nodes[i].out_channels[j] = i_to_j_channel
-#                 put!(i_to_j_channel, A * nodes[i].x)
-
-#                 nodes[j].in_channels[i] = i_to_j_channel
-#                 nodes[j].out_channels[i] = j_to_i_channel
-#                 put!(j_to_i_channel, B * nodes[j].x)
-#             end
-#         end
-#     end
-#     return nodes
-# end
+                A = sprand(n, n, p) 
+                B = sprand(n, n, p)
 
 
+                add_map!(random_sheaf, i, edge, A)
+                add_map!(random_sheaf, j, edge, B)
+            end
+        end
+    end
 
-
-
-
-
+    # Cut off unused rows from the bottom of random_sheaf.restriction_maps
+    random_sheaf.restriction_maps = random_sheaf.restriction_maps[Block.(1:edge), Block.(1:num_nodes)]
+    return random_sheaf
+end
 
 
 
