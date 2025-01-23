@@ -34,3 +34,18 @@ non_uniform_threaded_sheaf = threaded_sheaf(non_uniform_matrix_sheaf)
 @test non_uniform_threaded_sheaf[2].x == vec(non_uniform_matrix_sheaf.x[BlockArrays.Block(2, 1)])  # Check that edge dimension matches
 
 
+# Simulate the same laplacian on a MatrixSheaf and a list of ThreadedSheafNodes
+
+# random_matrix_s = random_matrix_sheaf(10, 4, 5)
+# random_threaded = threaded_sheaf(random_matrix_s)
+
+# iters = 100
+# my_step_size::Float32 = .01
+
+# for _ in 1:iters
+#     laplacian_update!(random_matrix_s, my_step_size)
+# end
+
+# iterate_laplacian!(random_threaded, my_step_size, iters)
+
+# TODO: Add a test for equality of the x values
