@@ -32,3 +32,5 @@ non_uniform_threaded_sheaf = threaded_sheaf(non_uniform_matrix_sheaf)
 
 @test size(non_uniform_threaded_sheaf)[1] == 3  # Check number of vertices matches
 @test non_uniform_threaded_sheaf[2].x == vec(non_uniform_matrix_sheaf.x[BlockArrays.Block(2, 1)])  # Check that edge dimension matches
+
+

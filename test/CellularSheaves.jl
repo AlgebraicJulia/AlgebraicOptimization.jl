@@ -200,7 +200,7 @@ V = 10
 E = 15
 dim = 3
 sparsity = 1.0
-er = erdos_renyi(V, E)
+er = Graphs.erdos_renyi(V, E)
 
 test_graph_sheaf = random_matrix_sheaf(er, dim, sparsity)
 
