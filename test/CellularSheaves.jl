@@ -1,5 +1,6 @@
 using AlgebraicOptimization
 using Test
+using Graphs
 
 
 
@@ -189,6 +190,33 @@ simulate!(sheaf_2)
 
 @test sheaf_2.x ≈ [0; 1; 2; 1]  atol=1e-3  
 
+
+# Random constructor for MatrixSheaf that takes in a Graph
+
+V = 10
+E = 15
+dim = 3
+sparsity = 1.0
+er = erdos_renyi(V, E)
+
+for i in edges(er)
+    println(i)
+end
+
+test_graph_sheaf = random_matrix_sheaf(er, dim, sparsity)
+
+# Number of non-zero maps in the restriction map matrix should equal twice the total number of edges in the graph
+
+num_restriction_maps = 0
+for v in 1:V
+    for e in 1:E
+        if !iszero(test_graph_sheaf.restriction_maps[Block(e, v)])
+            num_restriction_maps += 1
+        end
+    end
+end
+
+@test num_restriction_maps == 2 * E
 
 # Next steps: 10/28/24
 

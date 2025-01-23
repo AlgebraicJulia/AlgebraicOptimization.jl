@@ -10,6 +10,7 @@ using BlockArrays
 using ForwardDiff
 using Distributed
 using SparseArrays
+using Graphs
 
 
 struct CellularSheaf
@@ -431,7 +432,7 @@ function random_matrix_sheaf(num_nodes, edge_probability, restriction_map_dimens
     coin()::Bool = rand() < edge_probability
     n, p = restriction_map_dimension, restriction_map_density
     
-    random_sheaf = MatrixSheaf(n * ones(Int, num_nodes), n * ones(Int, num_nodes * (num_nodes - 1) ÷ 2))
+    random_sheaf = MatrixSheaf(n * ones(Int, num_nodes), n * ones(Int, num_nodes * (num_nodes - 1) ÷ 2))  # n choose 2 edge possibilities
 
     edge = 0
 
@@ -455,6 +456,27 @@ function random_matrix_sheaf(num_nodes, edge_probability, restriction_map_dimens
 
     # Cut off unused rows from the bottom of random_sheaf.restriction_maps
     random_sheaf.restriction_maps = random_sheaf.restriction_maps[Block.(1:edge), Block.(1:num_nodes)]
+    return random_sheaf
+end
+
+
+
+function random_matrix_sheaf(g::Graph, restriction_map_dimension, restriction_map_density)
+    n, p = restriction_map_dimension, restriction_map_density
+    random_sheaf = MatrixSheaf(n * ones(Int, nv(g)), n * ones(Int, ne(g)))
+
+    edge = 1
+    for e in edges(g)
+        A = sprand(n, n, p)
+        B = sprand(n, n, p)
+
+        i, j = src(e), dst(e)
+
+        add_map!(random_sheaf, i, edge, A)
+        add_map!(random_sheaf, j, edge, B)
+        edge += 1
+    end
+
     return random_sheaf
 end
 
