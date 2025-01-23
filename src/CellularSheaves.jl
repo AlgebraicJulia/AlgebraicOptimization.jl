@@ -2,7 +2,7 @@ module CellularSheaves
 
 export CellularSheaf, add_map!, coboundary_map, laplacian, is_global_section, SheafObjective, apply_f, apply_f_with_stabilizer, apply_lagrangian_to_x, apply_lagrangian_to_z, simulate!,
     SheafNode, simulate_distributed!, simulate_distributed_separate_steps!, SheafVertex, SheafEdge, xLaplacian, zLaplacian, MatrixSheaf, optimize!, random_matrix_sheaf,
-    OptimizationAlgorithm
+    OptimizationAlgorithm, laplacian_update!, gradient_update!, gradient_update_sequential!
 
 import Catlab: add_edge!
 
@@ -484,33 +484,38 @@ end
 
 
 function simulate!(s::MatrixSheaf, α::Float64 = .1, n_steps::Int = 1000)  # Uzawa's algorithm. Currently not very distributed.
-    make_coboundary(s)
+    make_coboundary(s)   # Calculate the coboundary map based on current restriction maps
     for _ in 1:n_steps
-        # Gradient update step
-        Threads.@threads for v in 1:blocksize(s.x)[1]   # Iterate the vertices
-            s.x[Block(v, 1)] += -ForwardDiff.gradient(s.f[v], s.x[Block(v, 1)]) * α  
-            # TODO: Turn ForwardDiff into ReverseDiff
-        end
-
-        # Laplacian multiply step
-        s.x +=  α * (-2 * s.coboundary' * s.coboundary * s.x - s.coboundary' * s.coboundary * s.λ)
-        s.λ += α * s.coboundary' * s.coboundary * s.x
+        gradient_update!(s, α)
+        laplacian_update!(s, α)
     end
 end
 
 function simulate_sequential!(s::MatrixSheaf, α::Float64 = .1, n_steps::Int = 1000)  # Uzawa's algorithm. Currently not very distributed.
-    s.coboundary = coboundary_map(s)   # Calculate the coboundary map based on restriction maps
+    make_coboundary(s)   # Calculate the coboundary map based on current restriction maps
     for _ in 1:n_steps
-        # Gradient update step
-        for v in 1:blocksize(s.x)[1]   # Iterate the vertices. No @threads here.
-            s.x[Block(v, 1)] += -ForwardDiff.gradient(s.f[v], s.x[Block(v, 1)]) * α   # TODO: Research faster gradient methods
-        end
-
-        # Laplacian multiply step
-        s.x +=  α * s.coboundary' * s.coboundary * (-2 * s.x - s.λ)
-        s.λ += α * s.coboundary' * s.coboundary * s.x
+        gradient_update!(s, α)
+        laplacian_update_sequential!(s, α)
     end
 end
+
+function gradient_update!(s::MatrixSheaf, α::Float64 = .1)
+    Threads.@threads for v in 1:blocksize(s.x)[1]   # Iterate the vertices. No @threads here.
+        s.x[Block(v, 1)] += -ForwardDiff.gradient(s.f[v], s.x[Block(v, 1)]) * α   # TODO: Research faster gradient methods
+    end
+end
+
+function gradient_update_sequential!(s::MatrixSheaf, α::Float64 = .1)
+    for v in 1:blocksize(s.x)[1]   # Iterate the vertices. No @threads here.
+        s.x[Block(v, 1)] += -ForwardDiff.gradient(s.f[v], s.x[Block(v, 1)]) * α   # TODO: Research faster gradient methods
+    end
+end
+
+function laplacian_update!(s::MatrixSheaf, α::Float64 = .1)
+    s.x +=  α * s.coboundary' * s.coboundary * (-2 * s.x - s.λ)
+    s.λ += α * s.coboundary' * s.coboundary * s.x
+end
+
 
 # Diagonal dominant
 # Add stuff to the diagonal (+xI)   smallest abs. value of the row sum of a symmetric matrix -> add that to the diagonal
