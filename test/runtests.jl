@@ -17,10 +17,9 @@ end
   include("OpenFlowGraphs.jl")
 end
 
-# TODO: fix failing tests
-#=@testset "Cellular Sheaves" begin
+@testset "Cellular Sheaves" begin
   include("CellularSheaves.jl")
-end=#
+end
 
 @testset "Multithreaded Cellular Sheaves" begin
   include("ThreadedSheaves.jl")
