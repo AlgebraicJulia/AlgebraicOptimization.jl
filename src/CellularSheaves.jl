@@ -2,13 +2,15 @@ module CellularSheaves
 
 export CellularSheaf, add_map!, coboundary_map, laplacian, is_global_section, SheafObjective, apply_f, apply_f_with_stabilizer, apply_lagrangian_to_x, apply_lagrangian_to_z, simulate!,
     SheafNode, simulate_distributed!, simulate_distributed_separate_steps!, SheafVertex, SheafEdge, xLaplacian, zLaplacian, MatrixSheaf, optimize!, random_matrix_sheaf,
-    OptimizationAlgorithm
+    OptimizationAlgorithm, laplacian_update!, gradient_update!, gradient_update_sequential!
 
 import Catlab: add_edge!
 
 using BlockArrays
 using ForwardDiff
 using Distributed
+using SparseArrays
+using Graphs
 
 
 struct CellularSheaf
@@ -327,7 +329,7 @@ Adds a restriction map to a matrix sheaf from vertex e to edge e.
 - `e::Int`: Index of the edge block.
 - `map::Matrix`: The restriction map to insert.
 """
-function add_map!(s::MatrixSheaf, v::Int, e::Int, map::Matrix{})
+function add_map!(s::MatrixSheaf, v::Int, e::Int, map)
     s.restriction_maps[Block(e, v)] = map
 end
 
@@ -423,80 +425,97 @@ function random_matrix_sheaf(V::Int, E::Int, dim::Int)
     return random_sheaf
 end
 
-# function random_matrix_sheaf(num_nodes, edge_probability, restriction_map_dimension, restriction_map_density)
-#     coin()::Bool = rand() < edge_probability
-#     n, p = restriction_map_dimension, restriction_map_density
+
+
+# Erdos-Reyni random graph: fixed probability that each pair of vertices has a corresponding edge.
+function random_matrix_sheaf(num_nodes, edge_probability, restriction_map_dimension, restriction_map_density)
+    coin()::Bool = rand() < edge_probability
+    n, p = restriction_map_dimension, restriction_map_density
     
-#     random_sheaf = MatrixSheaf(n * ones(num_nodes), [])
+    random_sheaf = MatrixSheaf(n * ones(Int, num_nodes), n * ones(Int, num_nodes * (num_nodes - 1) ÷ 2))  # n choose 2 edge possibilities
 
-#     for i in 1:num_nodes
-#         for j in i+1:num_nodes
-#             if coin()
-#                 A = sprand(n, n, p)
-#                 B = sprand(n, n, p)
+    edge = 0
+
+    for i in 1:num_nodes
+        for j in i+1:num_nodes
+            if coin()
+                edge += 1
+
+                # A = rand(n, n)
+                # B = rand(n, n)
+
+                A = sprand(n, n, p) 
+                B = sprand(n, n, p)
 
 
-#                 # push!(random_sheaf.)     Issue: we need to know the number of edges we're working with before constructing our random-sheaf because we don't easily have a way to add rows to that matrix
-#                 # But maybe we should...
+                add_map!(random_sheaf, i, edge, A)
+                add_map!(random_sheaf, j, edge, B)
+            end
+        end
+    end
 
-
-#                 nodes[i].neighbors[j] = A
-#                 nodes[j].neighbors[i] = B
-
-#                 i_to_j_channel = Channel{Vector{Float32}}(2)
-#                 j_to_i_channel = Channel{Vector{Float32}}(2)
-
-#                 nodes[i].in_channels[j] = j_to_i_channel
-#                 nodes[i].out_channels[j] = i_to_j_channel
-#                 put!(i_to_j_channel, A * nodes[i].x)
-
-#                 nodes[j].in_channels[i] = i_to_j_channel
-#                 nodes[j].out_channels[i] = j_to_i_channel
-#                 put!(j_to_i_channel, B * nodes[j].x)
-#             end
-#         end
-#     end
-#     return nodes
-# end
+    # Cut off unused rows from the bottom of random_sheaf.restriction_maps
+    random_sheaf.restriction_maps = random_sheaf.restriction_maps[Block.(1:edge), Block.(1:num_nodes)]
+    return random_sheaf
+end
 
 
 
+function random_matrix_sheaf(g::Graph, restriction_map_dimension, restriction_map_density)
+    n, p = restriction_map_dimension, restriction_map_density
+    random_sheaf = MatrixSheaf(n * ones(Int, nv(g)), n * ones(Int, ne(g)))
 
+    edge = 1
+    for e in edges(g)
+        A = sprand(n, n, p)
+        B = sprand(n, n, p)
 
+        i, j = src(e), dst(e)
 
+        add_map!(random_sheaf, i, edge, A)
+        add_map!(random_sheaf, j, edge, B)
+        edge += 1
+    end
 
+    return random_sheaf
+end
 
 
 
 
 function simulate!(s::MatrixSheaf, α::Float64 = .1, n_steps::Int = 1000)  # Uzawa's algorithm. Currently not very distributed.
-    make_coboundary(s)
+    make_coboundary(s)   # Calculate the coboundary map based on current restriction maps
     for _ in 1:n_steps
-        # Gradient update step
-        Threads.@threads for v in 1:blocksize(s.x)[1]   # Iterate the vertices
-            s.x[Block(v, 1)] += -ForwardDiff.gradient(s.f[v], s.x[Block(v, 1)]) * α  
-            # TODO: Turn ForwardDiff into ReverseDiff
-        end
-
-        # Laplacian multiply step
-        s.x +=  α * (-2 * s.coboundary' * s.coboundary * s.x - s.coboundary' * s.coboundary * s.λ)
-        s.λ += α * s.coboundary' * s.coboundary * s.x
+        gradient_update!(s, α)
+        laplacian_update!(s, α)
     end
 end
 
 function simulate_sequential!(s::MatrixSheaf, α::Float64 = .1, n_steps::Int = 1000)  # Uzawa's algorithm. Currently not very distributed.
-    s.coboundary = coboundary_map(s)   # Calculate the coboundary map based on restriction maps
+    make_coboundary(s)   # Calculate the coboundary map based on current restriction maps
     for _ in 1:n_steps
-        # Gradient update step
-        for v in 1:blocksize(s.x)[1]   # Iterate the vertices. No @threads here.
-            s.x[Block(v, 1)] += -ForwardDiff.gradient(s.f[v], s.x[Block(v, 1)]) * α   # TODO: Research faster gradient methods
-        end
-
-        # Laplacian multiply step
-        s.x +=  α * s.coboundary' * s.coboundary * (-2 * s.x - s.λ)
-        s.λ += α * s.coboundary' * s.coboundary * s.x
+        gradient_update!(s, α)
+        laplacian_update_sequential!(s, α)
     end
 end
+
+function gradient_update!(s::MatrixSheaf, α::Float64 = .1)
+    Threads.@threads for v in 1:blocksize(s.x)[1]   # Iterate the vertices. No @threads here.
+        s.x[Block(v, 1)] += -ForwardDiff.gradient(s.f[v], s.x[Block(v, 1)]) * α   # TODO: Research faster gradient methods
+    end
+end
+
+function gradient_update_sequential!(s::MatrixSheaf, α::Float64 = .1)
+    for v in 1:blocksize(s.x)[1]   # Iterate the vertices. No @threads here.
+        s.x[Block(v, 1)] += -ForwardDiff.gradient(s.f[v], s.x[Block(v, 1)]) * α   # TODO: Research faster gradient methods
+    end
+end
+
+function laplacian_update!(s::MatrixSheaf, α::Float64 = .1)
+    s.x +=  α * s.coboundary' * s.coboundary * (-2 * s.x - s.λ)
+    s.λ += α * s.coboundary' * s.coboundary * s.x
+end
+
 
 # Diagonal dominant
 # Add stuff to the diagonal (+xI)   smallest abs. value of the row sum of a symmetric matrix -> add that to the diagonal
