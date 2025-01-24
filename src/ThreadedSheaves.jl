@@ -205,7 +205,7 @@ function laplacian_step!(nodes, delta_x::Vector{Vector{Float32}}, clusters::Vect
     update_nodes!(nodes, step_size, delta_x, clusters)
 end
 
-function random_threaded_sheaf(num_nodes, edge_probability, restriction_map_dimension, restriction_map_density)
+function random_threaded_sheaf(num_nodes::Int, edge_probability::Float64, restriction_map_dimension::Int, restriction_map_density::Float64)
     nodes = ThreadedSheafNode[]
     coin()::Bool = rand() < edge_probability
     n, p = restriction_map_dimension, restriction_map_density
@@ -241,7 +241,43 @@ function random_threaded_sheaf(num_nodes, edge_probability, restriction_map_dime
     return nodes
 end
 
-function random_threaded_sheaf(g::Graph, restriction_map_dimension, restriction_map_density)
+function random_threaded_sheaf(num_nodes::Int, edge_probability::Float64, restriction_map_dimension::Int)
+    nodes = ThreadedSheafNode[]
+    coin()::Bool = rand() < edge_probability
+    n = restriction_map_dimension
+    for i in 1:num_nodes
+        push!(nodes, ThreadedSheafNode(i, n,
+            Dict{Int32,Matrix{Float32}}(),
+            Dict{Int32,Channel}(),
+            Dict{Int32,Channel}(), rand(n)))
+    end
+
+    for i in 1:num_nodes
+        for j in i+1:num_nodes
+            if coin()
+                A = rand(n, n)
+                B = rand(n, n)
+
+                nodes[i].neighbors[j] = A
+                nodes[j].neighbors[i] = B
+
+                i_to_j_channel = Channel{Vector{Float32}}(2)
+                j_to_i_channel = Channel{Vector{Float32}}(2)
+
+                nodes[i].in_channels[j] = j_to_i_channel
+                nodes[i].out_channels[j] = i_to_j_channel
+                put!(i_to_j_channel, A * nodes[i].x)
+
+                nodes[j].in_channels[i] = i_to_j_channel
+                nodes[j].out_channels[i] = j_to_i_channel
+                put!(j_to_i_channel, B * nodes[j].x)
+            end
+        end
+    end
+    return nodes
+end
+
+function random_threaded_sheaf(g::Graph, restriction_map_dimension::Int, restriction_map_density::Float64)
     nodes = ThreadedSheafNode[]
     n, p = restriction_map_dimension, restriction_map_density
 
@@ -255,6 +291,41 @@ function random_threaded_sheaf(g::Graph, restriction_map_dimension, restriction_
     for e in edges(g)
         A = sprand(n, n, p)
         B = sprand(n, n, p)
+
+        i, j = src(e), dst(e)
+
+        nodes[i].neighbors[j] = A
+        nodes[j].neighbors[i] = B
+
+        i_to_j_channel = Channel{Vector{Float32}}(2)
+        j_to_i_channel = Channel{Vector{Float32}}(2)
+
+        nodes[i].in_channels[j] = j_to_i_channel
+        nodes[i].out_channels[j] = i_to_j_channel
+        put!(i_to_j_channel, A * nodes[i].x)
+
+        nodes[j].in_channels[i] = i_to_j_channel
+        nodes[j].out_channels[i] = j_to_i_channel
+        put!(j_to_i_channel, B * nodes[j].x)
+    end
+
+    return nodes
+end
+
+function random_threaded_sheaf(g::Graph, restriction_map_dimension::Int)
+    nodes = ThreadedSheafNode[]
+    n = restriction_map_dimension
+
+    for i in 1:nv(g)
+        push!(nodes, ThreadedSheafNode(i, n,
+            Dict{Int32,Matrix{Float32}}(),
+            Dict{Int32,Channel}(),
+            Dict{Int32,Channel}(), rand(n)))
+    end
+
+    for e in edges(g)
+        A = rand(n, n)
+        B = rand(n, n)
 
         i, j = src(e), dst(e)
 
