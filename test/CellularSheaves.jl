@@ -210,7 +210,7 @@ num_restriction_maps = 0
 for v in 1:V
     for e in 1:E
         if !iszero(test_graph_sheaf.restriction_maps[BlockArrays.Block(e, v)])
-            num_restriction_maps += 1
+            global num_restriction_maps += 1
         end
     end
 end
