@@ -33,13 +33,13 @@ setup_times = Float64[]
 cluster_times = Float64[]
 laplacian_times = Float64[] 
 
-for i in 1:40
+for i in 1:4:20
 
-    push!(setup_times, @elapsed (nodes = random_threaded_sheaf(g, 5, 0.3)))
+    push!(setup_times, @elapsed (nodes = random_threaded_sheaf(g, 3, 0.3)))
 
     push!(cluster_times, @elapsed(clusters = compute_clusters(g, i)))
 
-    push!(laplacian_times,  (@elapsed iterate_laplacian!(nodes, 100, clusters)))
+    push!(laplacian_times,  (@elapsed iterate_laplacian!(nodes, 10, clusters)))
 
 end
 

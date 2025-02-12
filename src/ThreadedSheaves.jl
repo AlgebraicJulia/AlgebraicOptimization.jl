@@ -1,6 +1,6 @@
 module ThreadedSheaves
 
-export random_threaded_sheaf, random_initialization, initialize!, compute_clusters, threaded_sheaf
+export random_threaded_sheaf, random_initialization, initialize!, compute_clusters, threaded_sheaf, laplacian_step!
 
 import ..DistributedSheaves: iterate_laplacian!, distance_from_consensus
 
@@ -457,6 +457,7 @@ function initialize!(nodes::Vector{ThreadedSheafNode}, xs)
     end
 end
 
+# Construct a list of ThreadedSheafNodes from a MatrixSheaf
 function threaded_sheaf(s::MatrixSheaf)
 
     nodes = ThreadedSheafNode[]
