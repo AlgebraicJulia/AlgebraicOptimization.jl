@@ -2,7 +2,7 @@ module CellularSheaves
 
 export CellularSheaf, add_map!, coboundary_map, laplacian, is_global_section, SheafObjective, apply_f, apply_f_with_stabilizer, apply_lagrangian_to_x, apply_lagrangian_to_z, simulate!,
     SheafNode, simulate_distributed!, simulate_distributed_separate_steps!, SheafVertex, SheafEdge, xLaplacian, zLaplacian, MatrixSheaf, optimize!, random_matrix_sheaf,
-    OptimizationAlgorithm, laplacian_update!, gradient_update!, gradient_update_sequential!, make_coboundary!, laplacian_step!
+    OptimizationAlgorithm, laplacian_update!, gradient_update!, gradient_update_sequential!, make_coboundary!, laplacian_update_x!
 
 import Catlab: add_edge!
 
@@ -518,7 +518,7 @@ function laplacian_update!(s::MatrixSheaf, α::Float32 = .1f0)
 end
 
 # Without dual variable
-function laplacian_step!(s::MatrixSheaf, α::Float32 = .1f0)
+function laplacian_update_x!(s::MatrixSheaf, α::Float32 = .1f0)
     s.x -=  α * s.coboundary' * s.coboundary * s.x
 end
 

@@ -52,12 +52,12 @@ for dim in dims
 
     # Iterate laplacian on the MatrixSheaf
     mtime = @elapsed for _ in 1:passes
-        CellularSheaves.laplacian_step!(my_matrix_sheaf, α)
+        laplacian_update_x!(my_matrix_sheaf, α)
     end
 
     # Iterate laplacian on the ThreadedSheaf
     ttime = @elapsed for _ in 1:passes
-        ThreadedSheaves.laplacian_step!(my_threaded_sheaf, α)  # No clustering yet
+        laplacian_step!(my_threaded_sheaf, α)  # No clustering yet
     end
 
     push!(matrix_sheaf_times, mtime)
