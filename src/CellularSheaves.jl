@@ -98,7 +98,7 @@ function apply_lagrangian_to_z(so::SheafObjective)
 end
 
 
-function simulate!(so::SheafObjective, λ::Float32=0.1, n_steps::Int=100)  # Uzawa's algorithm. Currently not very distributed.
+function simulate!(so::SheafObjective, λ::Float32=0.1f0, n_steps::Int=100)  # Uzawa's algorithm. Currently not very distributed.
     for _ in 1:n_steps
         x_update = -ForwardDiff.gradient(apply_lagrangian_to_x(so), so.x)   # Ideally, these should be done separately for the individual x's.
         z_update = ForwardDiff.gradient(apply_lagrangian_to_z(so), so.z)   # Ideally, these should be done separately for the individual z's.
@@ -131,7 +131,7 @@ end
 
 
 # Uses the distributed sheaf structure to do Uzawa's algorithm, but executes sequentially (not distributed)
-function simulate!(sheaf::Vector{SheafNode}, λ::Float32=0.1, n_steps::Int=10)
+function simulate!(sheaf::Vector{SheafNode}, λ::Float32=0.1f0, n_steps::Int=10)
     for _ in 1:n_steps
         for i in 1:length(sheaf)
             v = sheaf[i]
@@ -154,7 +154,7 @@ end
 
 
 # Same as above but uses @distributed to actually execute in a distributed way
-function simulate_distributed!(sheaf::Vector{SheafNode}, λ::Float32=0.1, n_steps::Int=10)
+function simulate_distributed!(sheaf::Vector{SheafNode}, λ::Float32=0.1f0, n_steps::Int=10)
     for _ in 1:n_steps
         @sync @distributed for i in 1:length(sheaf)
             v = sheaf[i]
@@ -177,7 +177,7 @@ end
 
 
 # Same Uzawa's algorithm, except computing and applying updates are separated into different steps. More suited to the literature.
-function simulate_distributed_separate_steps!(sheaf::Vector{SheafNode}, λ::Float32=0.1, n_steps::Int=10)
+function simulate_distributed_separate_steps!(sheaf::Vector{SheafNode}, λ::Float32=0.1f0, n_steps::Int=10)
     for _ in 1:n_steps
         # Phase 1: Compute updates
         @sync @distributed for i in 1:length(sheaf)   # Separate read/compute and write steps? Might be helpful...     
@@ -253,7 +253,7 @@ function zLaplacian(v::SheafVertex, e::SheafEdge)
 end
 
 # This newer implementation with the separate vertex and edge workers makes the simulate method cleaner
-function simulate_distributed!(sheaf::Vector{SheafVertex}, λ::Float32=0.1, n_steps::Int=10)
+function simulate_distributed!(sheaf::Vector{SheafVertex}, λ::Float32=f0, n_steps::Int=10)
     for _ in 1:n_steps
         @sync @distributed for i in 1:length(sheaf)  # Does this actually work, or are different processes getting different information?
             v = sheaf[i]
@@ -385,7 +385,7 @@ end
 
 Checks if the sheaf is a global section by verifying if the product of the Laplacian and primal variables is approximately zero.
 """
-function is_global_section(s::MatrixSheaf; tol::Float32 = 1e-8)
+function is_global_section(s::MatrixSheaf; tol::Float32 = 1f-8)
     # Check if the product of the Laplacian and s.x is approximately zero within the given tolerance
     return isapprox(s.coboundary' * s.coboundary * s.x, zero(s.x); atol=tol)
 end
@@ -483,7 +483,7 @@ end
 
 
 
-function simulate!(s::MatrixSheaf, α::Float32 = .1, n_steps::Int = 1000)  # Uzawa's algorithm. Currently not very distributed.
+function simulate!(s::MatrixSheaf, α::Float32 = .1f0, n_steps::Int = 1000)  # Uzawa's algorithm. Currently not very distributed.
     make_coboundary!(s)   # Calculate the coboundary map based on current restriction maps
     for _ in 1:n_steps
         gradient_update!(s, α)
@@ -491,7 +491,7 @@ function simulate!(s::MatrixSheaf, α::Float32 = .1, n_steps::Int = 1000)  # Uza
     end
 end
 
-function simulate_sequential!(s::MatrixSheaf, α::Float32 = .1, n_steps::Int = 1000)  # Uzawa's algorithm. Currently not very distributed.
+function simulate_sequential!(s::MatrixSheaf, α::Float32 = .1f0, n_steps::Int = 1000)  # Uzawa's algorithm. Currently not very distributed.
     make_coboundary!(s)   # Calculate the coboundary map based on current restriction maps
     for _ in 1:n_steps
         gradient_update!(s, α)
@@ -499,13 +499,13 @@ function simulate_sequential!(s::MatrixSheaf, α::Float32 = .1, n_steps::Int = 1
     end
 end
 
-function gradient_update!(s::MatrixSheaf, α::Float32 = .1)
+function gradient_update!(s::MatrixSheaf, α::Float32 = .1f0)
     Threads.@threads for v in 1:blocksize(s.x)[1]   # Iterate the vertices. No @threads here.
         s.x[Block(v, 1)] += -ForwardDiff.gradient(s.f[v], s.x[Block(v, 1)]) * α   # TODO: Research faster gradient methods
     end
 end
 
-function gradient_update_sequential!(s::MatrixSheaf, α::Float32 = .1)
+function gradient_update_sequential!(s::MatrixSheaf, α::Float32 = f0)
     for v in 1:blocksize(s.x)[1]   # Iterate the vertices. No @threads here.
         s.x[Block(v, 1)] += -ForwardDiff.gradient(s.f[v], s.x[Block(v, 1)]) * α   # TODO: Research faster gradient methods
     end
