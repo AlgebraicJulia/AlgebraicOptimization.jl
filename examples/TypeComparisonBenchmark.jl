@@ -9,7 +9,6 @@ using Test
 
 # This benchmark compares the efficiency of the laplacian update step on MatrixSheaves and ThreadedSheaves.
 
-
 # construct the database
 # http://sparse.tamu.edu
 ssmc = ssmc_db()
@@ -49,19 +48,18 @@ for dim in dims
     make_coboundary!(my_matrix_sheaf)   # TODO: Potentially incorporate this into some of the constructors
     my_threaded_sheaf = threaded_sheaf(my_matrix_sheaf)
 
-
     # Iterate laplacian on the MatrixSheaf
-    mtime = @elapsed for _ in 1:passes
+    matrix_time = @elapsed for _ in 1:passes
         laplacian_update_x!(my_matrix_sheaf, α)
     end
 
     # Iterate laplacian on the ThreadedSheaf
-    ttime = @elapsed for _ in 1:passes
+    threaded_time = @elapsed for _ in 1:passes
         laplacian_step!(my_threaded_sheaf, α)  # No clustering yet
     end
 
-    push!(matrix_sheaf_times, mtime)
-    push!(threaded_sheaf_times, ttime)
+    push!(matrix_sheaf_times, matrix_time)
+    push!(threaded_sheaf_times, threaded_time)
 end
 
 
@@ -71,8 +69,10 @@ my_threaded_sheaf_x = vcat([node.x for node in my_threaded_sheaf]...)
 
 @test my_matrix_sheaf_x ≈ my_threaded_sheaf_x
 
-plot(
+p = plot(
     dims, matrix_sheaf_times, label="MatrixSheaf", 
     xlabel="Dimensions", ylabel="Time (s)", title="MatrixSheaf vs. ThreadedSheaf Times"
 )
 plot!(dims, threaded_sheaf_times, label="ThreadedSheaf")
+
+savefig(p, "./examples/type_comparison_benchmark.png")

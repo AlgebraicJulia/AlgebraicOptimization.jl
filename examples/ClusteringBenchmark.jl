@@ -33,9 +33,9 @@ setup_times = Float64[]
 cluster_times = Float64[]
 laplacian_times = Float64[] 
 
-for i in 1:4:20
+for i in 1:20
 
-    push!(setup_times, @elapsed (nodes = random_threaded_sheaf(g, 3, 0.3)))
+    push!(setup_times, @elapsed (nodes = random_threaded_sheaf(g, 50, 0.2)))
 
     push!(cluster_times, @elapsed(clusters = compute_clusters(g, i)))
 
@@ -43,13 +43,12 @@ for i in 1:4:20
 
 end
 
-# plot(setup_times)
-
-# plot(laplacian_times)
-
-plot(
+p = plot(
     1:length(setup_times), setup_times, label="Setup Times", 
-    xlabel="Iteration", ylabel="Time (s)", title="Benchmark Times"
+    xlabel="Clusters", ylabel="Time (s)", title="Benchmark Times"
 )
 plot!(1:length(laplacian_times), cluster_times, label="Clustering Times")
 plot!(1:length(laplacian_times), laplacian_times, label="Laplacian Times")
+
+
+savefig(p, "./examples/clustering_benchmark.png")
