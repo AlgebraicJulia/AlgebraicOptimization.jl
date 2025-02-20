@@ -6,6 +6,7 @@ using SparseArrays
 using SuiteSparseMatrixCollection
 using BenchmarkTools
 using Test
+using PlotThemes
 
 # This benchmark compares the efficiency of the laplacian update step on MatrixSheaves and ThreadedSheaves.
 
@@ -41,7 +42,7 @@ my_threaded_sheaf = threaded_sheaf(my_matrix_sheaf)    # TODO: Fix bug for this 
 # Set up benchmarks
 matrix_sheaf_times = Float64[]
 threaded_sheaf_times = Float64[]
-dims = 1:4:10
+dims = 1:2:10
 
 for dim in dims
     my_matrix_sheaf = random_matrix_sheaf(g, dim, 1.0)
@@ -68,6 +69,9 @@ my_matrix_sheaf_x = vec(vcat(my_matrix_sheaf.x))
 my_threaded_sheaf_x = vcat([node.x for node in my_threaded_sheaf]...)
 
 @test my_matrix_sheaf_x ≈ my_threaded_sheaf_x
+
+# Set the theme
+theme(:dark)
 
 p = plot(
     dims, matrix_sheaf_times, label="MatrixSheaf", 

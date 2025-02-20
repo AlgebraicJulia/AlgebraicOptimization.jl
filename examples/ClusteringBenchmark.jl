@@ -5,6 +5,7 @@ using MatrixMarket
 using SparseArrays
 using SuiteSparseMatrixCollection
 using BenchmarkTools
+using PlotThemes
 
 # construct the database
 # http://sparse.tamu.edu
@@ -35,13 +36,16 @@ laplacian_times = Float64[]
 
 for i in 1:20
 
-    push!(setup_times, @elapsed (nodes = random_threaded_sheaf(g, 50, 0.2)))
+    push!(setup_times, @elapsed (nodes = random_threaded_sheaf(g, 50, 0.9)))
 
     push!(cluster_times, @elapsed(clusters = compute_clusters(g, i)))
 
     push!(laplacian_times,  (@elapsed iterate_laplacian!(nodes, 10, clusters)))
 
 end
+
+# Set the theme
+theme(:dark)
 
 p = plot(
     1:length(setup_times), setup_times, label="Setup Times", 
