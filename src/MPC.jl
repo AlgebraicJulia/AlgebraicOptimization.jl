@@ -68,7 +68,8 @@ function do_mpc(x_0, u_0)
     # Plot results of state vs. time
     x_matrix = hcat(x...)
     theme(:juno)
-    p = plot(1:100, x_matrix', label=["x1" "x2"], title="MPC State Evolution")
+    p = plot(1:100, x_matrix', label=["x1" "x2"], title="MPC State Evolution", 
+    xlabel="Iteration", ylabel="State value")
     savefig(p, "./examples/single_agent_mpc.png")
 end
 
