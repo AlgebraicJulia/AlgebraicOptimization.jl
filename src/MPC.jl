@@ -7,11 +7,11 @@ function simple_mpc(x_k, u_k)
     horizon = 10
 
     # Model
-    model = Model(solver=IpoptSolver(print_level=0))
+    model = Model(solver=IpoptSolver())
 
     # Variables
-    @variable(model, zeros((2, horizon)) <= x[1:2, 1:horizon])
-    @variable(model, zeros((1, horizon)) <= u[1:1, 1:horizon])
+    @variable(model, x[1:2, 1:horizon] >= zeros((2, horizon)))
+    @variable(model, u[1:1, 1:horizon] >= zeros((1, horizon)))
     
     # Constraints
     @constraint(model, x[:, 1] .== x_k)
@@ -29,3 +29,8 @@ function simple_mpc(x_k, u_k)
     return getvalue(u[:, 1])
 end
     
+
+
+x = [1.0; 2.0]
+u = [0.0]
+u_new = simple_mpc(x, u)
