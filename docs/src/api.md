@@ -2,4 +2,5 @@
 
 ```@autodocs
 Modules = [AlgebraicOptimization]
+Private = false
 ```
