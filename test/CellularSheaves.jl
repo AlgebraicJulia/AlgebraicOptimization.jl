@@ -121,7 +121,7 @@ CellularSheaves.add_edge!(sheaf_node_1, sheaf_node_2, [0 1], [1 0])
 
 distributed_sheaf_1 = [sheaf_node_1, sheaf_node_2]
 
-simulate_distributed!(distributed_sheaf_1, .1, 100)
+simulate_distributed!(distributed_sheaf_1, .1f0, 100)
 # simulate!(distributed_sheaf_1, .1, 100)
 
 @test distributed_sheaf_1[1].x[2] ≈ 1  atol=1e-3
@@ -145,7 +145,7 @@ CellularSheaves.add_edge!(sheaf_node_5, sheaf_node_3, [1 0], [0 1])
 distributed_sheaf_2 = [sheaf_node_3, sheaf_node_4, sheaf_node_5]    # Should this be a shared array? Would that change anything?
 distributed_sheaf_2_copy = deepcopy(distributed_sheaf_2)
 
-simulate_distributed!(distributed_sheaf_2, .1, 1000)
+simulate_distributed!(distributed_sheaf_2, .1f0, 1000)
 # simulate!(distributed_sheaf_2_copy, .1, 1000)
 
 @test distributed_sheaf_2[1].x ≈ [0, 0]  atol=1e-3
@@ -175,7 +175,7 @@ sheaf_vertex_7 = SheafVertex(x -> (x[2] - 3)^2, [-2, 5], [0, 0])
 CellularSheaves.add_edge!(sheaf_vertex_6, sheaf_vertex_7, [1 0; 0 1], [1 0; 0 1])   # Identity matrix since this is the common sheaf
 
 distributed_sheaf_4 = [sheaf_vertex_6, sheaf_vertex_7]
-simulate_distributed!(distributed_sheaf_4, .1, 100)
+simulate_distributed!(distributed_sheaf_4, .1f0, 100)
 
 @test sheaf_vertex_6.x[1] ≈ 0  atol=1e-3
 @test sheaf_vertex_6.x[2] ≈ 3  atol=1e-3
