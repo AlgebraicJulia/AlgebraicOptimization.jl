@@ -2,7 +2,8 @@ module CellularSheaves
 
 export CellularSheaf, add_map!, coboundary_map, laplacian, is_global_section, SheafObjective, apply_f, apply_f_with_stabilizer, apply_lagrangian_to_x, apply_lagrangian_to_z, simulate!,
     SheafNode, simulate_distributed!, simulate_distributed_separate_steps!, SheafVertex, SheafEdge, xLaplacian, zLaplacian, MatrixSheaf, optimize!, random_matrix_sheaf,
-    OptimizationAlgorithm, laplacian_update!, gradient_update!, gradient_update_sequential!
+    OptimizationAlgorithm, laplacian_update!, gradient_update!, gradient_update_sequential!, nearest_global_section,
+    constant_sheaf
 
 import Catlab: add_edge!
 
@@ -11,7 +12,8 @@ using ForwardDiff
 using Distributed
 using SparseArrays
 using Graphs
-
+using Krylov
+using LinearAlgebra
 
 struct CellularSheaf
     V::Vector{Int}    # Vertex dimensions
@@ -288,7 +290,7 @@ This is primarily used for distributed Uzawa-type optimization algorithms. Based
 - `coboundary::BlockArray{Float64}`: Coboundary maps derived from the restriction maps.
 """
 mutable struct MatrixSheaf
-    x::BlockArray{Float64} 
+    x::BlockArray{Float64}
     λ::BlockArray{Float64}
     f::Vector{Function}
     restriction_maps::BlockArray{Float64}  # Could be a sparse array. This is an e * v matrix.
@@ -308,7 +310,7 @@ Constructs a `MatrixSheaf` with specified vertex dimensions `V` and edge dimensi
 - `E::Vector{Int}`: Dimensions of stalks corresponding to edges.
 - `f::Union{Vector{Function}, Nothing}`: Optional vector of objective functions.
 """
-function MatrixSheaf(V::Vector{Int}, E::Vector{Int}, f::Union{Vector{Function}, Nothing} = nothing)
+function MatrixSheaf(V::Vector{Int}, E::Vector{Int}, f::Union{Vector{Function},Nothing}=nothing)
     f = f === nothing ? Function[] : f  # Set `f` to an empty vector if `nothing` was provided
     x = BlockArray{Float64}(ones(sum(V), 1), V, [1])
     λ = BlockArray{Float64}(zeros(sum(V), 1), V, [1])
@@ -342,7 +344,7 @@ Computes the coboundary map for a matrix sheaf. Negates the second non-zero bloc
 """
 function coboundary_map(s::MatrixSheaf)
     # Iterate through the restriction_maps matrix and negate the second non-zero block in each row
-    coboundary = copy(s.restriction_maps)    
+    coboundary = copy(s.restriction_maps)
     for e in 1:blocksize(coboundary)[1]   # Iterate the block rows
         has_seen_block = false
         for v in 1:blocksize(coboundary)[2]
@@ -385,11 +387,33 @@ end
 
 Checks if the sheaf is a global section by verifying if the product of the Laplacian and primal variables is approximately zero.
 """
-function is_global_section(s::MatrixSheaf; tol::Float64 = 1e-8)
+function is_global_section(s::MatrixSheaf; tol::Float64=1e-8)
     # Check if the product of the Laplacian and s.x is approximately zero within the given tolerance
     return isapprox(s.coboundary' * s.coboundary * s.x, zero(s.x); atol=tol)
 end
 
+"""
+    constant_sheaf(g, dim)
+
+Returns a dim-dimensional constant sheaf over the graph g
+"""
+function constant_sheaf(g::Graph, dim::Int)
+    res = MatrixSheaf(dim * ones(Int, nv(g)), dim * ones(Int, ne(g)))
+
+    edge = 1
+    for e in edges(g)
+        A = I(dim)
+        B = I(dim)
+
+        i, j = src(e), dst(e)
+
+        add_map!(res, i, edge, A)
+        add_map!(res, j, edge, B)
+        edge += 1
+    end
+
+    return res
+end
 
 """
     random_matrix_sheaf(V::Int, E::Int, dim::Int) -> MatrixSheaf
@@ -431,7 +455,7 @@ end
 function random_matrix_sheaf(num_nodes, edge_probability, restriction_map_dimension, restriction_map_density)
     coin()::Bool = rand() < edge_probability
     n, p = restriction_map_dimension, restriction_map_density
-    
+
     random_sheaf = MatrixSheaf(n * ones(Int, num_nodes), n * ones(Int, num_nodes * (num_nodes - 1) ÷ 2))  # n choose 2 edge possibilities
 
     edge = 0
@@ -444,7 +468,7 @@ function random_matrix_sheaf(num_nodes, edge_probability, restriction_map_dimens
                 # A = rand(n, n)
                 # B = rand(n, n)
 
-                A = sprand(n, n, p) 
+                A = sprand(n, n, p)
                 B = sprand(n, n, p)
 
 
@@ -461,7 +485,7 @@ end
 
 
 
-function random_matrix_sheaf(g::Graph, restriction_map_dimension, restriction_map_density)
+function random_matrix_sheaf(g::Graph, restriction_map_dimension::Float64, restriction_map_density::Float64)
     n, p = restriction_map_dimension, restriction_map_density
     random_sheaf = MatrixSheaf(n * ones(Int, nv(g)), n * ones(Int, ne(g)))
 
@@ -480,10 +504,41 @@ function random_matrix_sheaf(g::Graph, restriction_map_dimension, restriction_ma
     return random_sheaf
 end
 
+function random_matrix_sheaf(g::Graph, node_dim::Int, edge_dim::Int)
+    n, m = node_dim, edge_dim
+    random_sheaf = MatrixSheaf(n * ones(Int, nv(g)), m * ones(Int, ne(g)))
+
+    edge = 1
+    for e in edges(g)
+        A = rand(0.0:1.0:1.0, m, n)
+        B = rand(0.0:1.0:1.0, m, n)
+
+        i, j = src(e), dst(e)
+
+        add_map!(random_sheaf, i, edge, A)
+        add_map!(random_sheaf, j, edge, B)
+        edge += 1
+    end
+
+    return random_sheaf
+end
+
+# Compute the projection of x onto the space of global sections of s
+function nearest_global_section(s::MatrixSheaf, x; solver=cg)
+    d = coboundary_map(s)
+
+    eL = d * d'
+
+    b = d * x
+
+    y, stats = solver(Array(eL), Array(b))
+    println(stats)
+
+    return x - d' * y
+end
 
 
-
-function simulate!(s::MatrixSheaf, α::Float64 = .1, n_steps::Int = 1000)  # Uzawa's algorithm. Currently not very distributed.
+function simulate!(s::MatrixSheaf, α::Float64=0.1, n_steps::Int=1000)  # Uzawa's algorithm. Currently not very distributed.
     make_coboundary(s)   # Calculate the coboundary map based on current restriction maps
     for _ in 1:n_steps
         gradient_update!(s, α)
@@ -491,7 +546,7 @@ function simulate!(s::MatrixSheaf, α::Float64 = .1, n_steps::Int = 1000)  # Uza
     end
 end
 
-function simulate_sequential!(s::MatrixSheaf, α::Float64 = .1, n_steps::Int = 1000)  # Uzawa's algorithm. Currently not very distributed.
+function simulate_sequential!(s::MatrixSheaf, α::Float64=0.1, n_steps::Int=1000)  # Uzawa's algorithm. Currently not very distributed.
     make_coboundary(s)   # Calculate the coboundary map based on current restriction maps
     for _ in 1:n_steps
         gradient_update!(s, α)
@@ -499,20 +554,20 @@ function simulate_sequential!(s::MatrixSheaf, α::Float64 = .1, n_steps::Int = 1
     end
 end
 
-function gradient_update!(s::MatrixSheaf, α::Float64 = .1)
+function gradient_update!(s::MatrixSheaf, α::Float64=0.1)
     Threads.@threads for v in 1:blocksize(s.x)[1]   # Iterate the vertices. No @threads here.
         s.x[Block(v, 1)] += -ForwardDiff.gradient(s.f[v], s.x[Block(v, 1)]) * α   # TODO: Research faster gradient methods
     end
 end
 
-function gradient_update_sequential!(s::MatrixSheaf, α::Float64 = .1)
+function gradient_update_sequential!(s::MatrixSheaf, α::Float64=0.1)
     for v in 1:blocksize(s.x)[1]   # Iterate the vertices. No @threads here.
         s.x[Block(v, 1)] += -ForwardDiff.gradient(s.f[v], s.x[Block(v, 1)]) * α   # TODO: Research faster gradient methods
     end
 end
 
-function laplacian_update!(s::MatrixSheaf, α::Float64 = .1)
-    s.x +=  α * s.coboundary' * s.coboundary * (-2 * s.x - s.λ)
+function laplacian_update!(s::MatrixSheaf, α::Float64=0.1)
+    s.x += α * s.coboundary' * s.coboundary * (-2 * s.x - s.λ)
     s.λ += α * s.coboundary' * s.coboundary * s.x
 end
 
