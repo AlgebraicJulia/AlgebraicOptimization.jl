@@ -2,6 +2,7 @@ using JuMP
 using Ipopt
 using Plots
 using PlotThemes
+using LinearAlgebra
 
 """     optimize_step(x_k, u_k)
 
@@ -10,11 +11,14 @@ Performs a single Model Predictive Control (MPC) optimization step.
 # Arguments
 - `x_k::Matrix{Float64}`: The current state matrix (2x1 vector).
 - `u_k::Matrix{Float64}`: The current input matrix (2x1 vector).
+- `Q::Matrix{Float64}`: The state cost matrix (2x2).
+- `R::Matrix{Float64}`: The input cost matrix (2x2).
+- `x_target::Matrix{Float64}`: The target state matrix (2x1 vector).
 
 # Returns
 - `Vector{Float64}`: The optimized control input for the next step.
 """
-function optimize_step(x_k, u_k)
+function optimize_step(x_k, u_k, Q, R, x_target)
     # Constants
     horizon = 10  # Prediction horizon
 
@@ -24,6 +28,7 @@ function optimize_step(x_k, u_k)
 
     # Decision variables: state trajectory (x) and control inputs (u)
     @variable(model, x[1:2, 1:horizon])
+    #@variable(model, u[1:2, 1:horizon])
     @variable(model, -1 <= u[1:2, 1:horizon] <= 1)  # Control limits
     
     # Initial state and control constraints
@@ -34,9 +39,10 @@ function optimize_step(x_k, u_k)
     for k = 1:horizon-1
         @constraint(model, x[:, k+1] .== x[:, k] + u[:, k])
     end
-    
+
     # Define the cost function (sum of squared states and inputs over the horizon)
-    @objective(model, Min, sum(x[:, k]'x[:, k] + u[:, k]'*u[:, k] for k = 1:horizon))
+    # @objective(model, Min, sum((x[:, k]'*Q*x[:, k]) + (u[:, k]'*R*u[:, k]) for k = 1:horizon) +  1000 * ((x[:, horizon] - x_target)' * Q * (x[:, horizon] - x_target)))
+    @objective(model, Min, sum(((x[:, k] - x_target)'*Q*(x[:, k] - x_target)) + (u[:, k]'*R*u[:, k]) for k = 1:horizon))
 
     # Solve the optimization problem
     optimize!(model)
@@ -56,11 +62,18 @@ Runs Model Predictive Control (MPC) over multiple time steps and visualizes the 
 """
 function do_mpc(x_0, u_0)
     x = [x_0]  # Store state trajectory as a list of vectors
+    u_to_plot = [u_0]
     u = u_0  # Initial control input
+    Q = randn(2,2)  # State weights
+    Q = Q * Q'  # Ensure Q is positive semi-definite
+    R = randn(2,2)  # Control input weights
+    R = R * R'  # Ensure R is positive semi-definite
+    x_target = [7.0; 13.0]  # Desired terminal state
 
     # MPC loop for 99 iterations
     for i in 1:99
-        u = optimize_step(x[end], u)  # Compute optimal control input
+        u = optimize_step(x[end], u, Q, R, x_target)  # Compute optimal control input
+        push!(u_to_plot, u)  # Store control input for plotting
         new_x = x[end] + u  # Update state using system dynamics
         push!(x, new_x)  # Store new state
     end
@@ -71,11 +84,17 @@ function do_mpc(x_0, u_0)
     p = plot(1:100, x_matrix', label=["x1" "x2"], title="MPC State Evolution", 
     xlabel="Iteration", ylabel="State value")
     savefig(p, "./examples/single_agent_mpc.png")
+
+    # Plot results of control input vs. time
+    u_matrix = hcat(u_to_plot...)   
+    plot!(1:100, u_matrix', label=["u1" "u2"], title="MPC Control Input Evolution",
+    xlabel="Iteration", ylabel="Control input value")
+    savefig(p, "./examples/single_agent_mpc_control.png")
 end
 
 # Example initial conditions for state and control input
-x = [1.0; 2.0]
-u = [3.0, 4.0]
+x = vec(rand(1,2) * 10.0)
+u = vec(rand(1,2) * 10.0)
 
 # Run the MPC simulation and plot results
 do_mpc(x, u)
