@@ -97,6 +97,8 @@ function do_mpc(x_0, u_0)
 
     p = plot(x_matrix[1, :], x_matrix[2, :], label="State trajectory", title="MPC State Trajectory",
     xlabel="x1", ylabel="x2", legend=:bottomright)
+    scatter!(x_matrix[1, :], x_matrix[2, :], label="States", marker=:circle, markersize=4)  # Overlay points
+
     savefig(p, "./examples/single_agent_mpc_trajectory.png")
 end
 
