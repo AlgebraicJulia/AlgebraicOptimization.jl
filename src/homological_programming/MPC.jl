@@ -1,7 +1,6 @@
 module MPC
 
-export LinearSystem, optimize_step
-
+export DiscreteLinearSystem, optimize_step, lqr_model, lq_tracking_model
 
 using JuMP
 using Ipopt
@@ -9,14 +8,64 @@ using Plots
 using PlotThemes
 using LinearAlgebra
 
-struct LinearSystem
-    A::Matrix
-    B::Matrix
+struct DiscreteLinearSystem
+    A::AbstractMatrix
+    B::AbstractMatrix
+    C::AbstractMatrix
 end
 
-function (s::LinearSystem)(x, u)
+function (s::DiscreteLinearSystem)(x, u)
     return s.A * x + s.B * u
 end
+
+
+function lqr_model(Q::AbstractMatrix, R::AbstractMatrix, s::DiscreteLinearSystem, x0, horizon, control_bounds)
+    model = Model(Ipopt.Optimizer)
+
+    state_dim = size(s.A)[2]
+    control_dim = size(s.B)[2]
+
+    @assert size(Q) == (state_dim, state_dim)
+    @assert size(R) == (control_dim, control_dim)
+
+    @variable(model, x[1:state_dim, 1:horizon])
+    @variable(model, control_bounds[1] <= u[1:control_dim, 1:horizon-1] <= control_bounds[2])
+
+    @constraint(model, x[:, 1] .== x0)
+
+    for k = 1:horizon-1
+        @constraint(model, x[:, k+1] .== s.A * x[:, k] + s.B * u[:, k])
+    end
+
+    @objective(model, Min, sum((x[:, k]' * Q * x[:, k] + u[:, k]' * R * u[:, k]) for k in 1:horizon-1))
+
+    return model
+end
+
+function lq_tracking_model(Q::AbstractMatrix, R::AbstractMatrix, s::DiscreteLinearSystem, x0, x_target, horizon, control_bounds)
+    model = Model(Ipopt.Optimizer)
+
+    state_dim = size(s.A)[2]
+    control_dim = size(s.B)[2]
+
+    @assert size(Q) == (state_dim, state_dim)
+    @assert size(R) == (control_dim, control_dim)
+
+    @variable(model, x[1:state_dim, 1:horizon])
+    @variable(model, control_bounds[1] <= u[1:control_dim, 1:horizon-1] <= control_bounds[2])
+
+    @constraint(model, x[:, 1] .== x0)
+
+    for k = 1:horizon-1
+        @constraint(model, x[:, k+1] .== s.A * x[:, k] + s.B * u[:, k])
+    end
+
+    @objective(model, Min, sum(((x[:, k] - x_target)' * Q * (x[:, k] - x_target) + u[:, k]' * R * u[:, k]) for k in 1:horizon-1))
+
+    return model
+end
+
+
 
 
 """     optimize_step(x_k, u_k)
@@ -33,7 +82,7 @@ Performs a single Model Predictive Control (MPC) optimization step.
 # Returns
 - `Vector{Float64}`: The optimized control input for the next step.
 """
-function optimize_step(x_k, Q, R, s::LinearSystem, x_target, ρ::Real)
+function optimize_step(x_k, Q, R, s::DiscreteLinearSystem, x_target, ρ::Real)
     # Constants
     horizon = 10  # Prediction horizon
 
@@ -75,7 +124,7 @@ Runs Model Predictive Control (MPC) over multiple time steps and visualizes the 
 - `u_0::Vector{Float64}`: Initial control input vector (2D system).
 
 """
-function do_mpc(x_0, u_0, s::LinearSystem)
+function do_mpc(x_0, u_0, s::DiscreteLinearSystem)
     x = [x_0]  # Store state trajectory as a list of vectors
     u_to_plot = [u_0]
     u = u_0  # Initial control input
@@ -117,14 +166,14 @@ function do_mpc(x_0, u_0, s::LinearSystem)
 end
 
 # Example initial conditions for state and control input
-x = vec(rand(1, 2) * 10.0)
+#x = vec(rand(1, 2) * 10.0)
 #u = vec(rand(1,2) * 10.0)
-u = [0.0; 0.0]
+#u = [0.0; 0.0]
 
-s = LinearSystem(
+#=s = DiscreteLinearSystem(
     [1.0 0.05; 0.0 1.0], 0.05 * I(2)
 )
-
+=#
 # Run the MPC simulation and plot results
 #do_mpc(x, u, s)
 

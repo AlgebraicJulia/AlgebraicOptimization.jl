@@ -11,7 +11,7 @@ abstract type HomologicalProgam end
 struct MPCParams
     Q::Matrix
     R::Matrix
-    ls::LinearSystem
+    ls::DiscreteLinearSystem
 end
 
 struct MultiAgentMPCProblem <: HomologicalProgam
