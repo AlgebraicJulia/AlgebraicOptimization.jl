@@ -1,3 +1,8 @@
+module MPC
+
+export LinearSystem, optimize_step
+
+
 using JuMP
 using Ipopt
 using Plots
@@ -28,7 +33,7 @@ Performs a single Model Predictive Control (MPC) optimization step.
 # Returns
 - `Vector{Float64}`: The optimized control input for the next step.
 """
-function optimize_step(x_k, Q, R, s::LinearSystem, x_target)
+function optimize_step(x_k, Q, R, s::LinearSystem, x_target, ρ::Real)
     # Constants
     horizon = 10  # Prediction horizon
 
@@ -52,13 +57,13 @@ function optimize_step(x_k, Q, R, s::LinearSystem, x_target)
 
     # Define the cost function (sum of squared states and inputs over the horizon)
     #@objective(model, Min, sum((x[:, k]' * Q * x[:, k]) + (u[:, k]' * R * u[:, k]) for k = 1:horizon))# +  5 * ((x[:, horizon] - x_target)' * Q * (x[:, horizon] - x_target)))
-    @objective(model, Min, sum(((x[:, k] - x_target)' * Q * (x[:, k] - x_target)) + (u[:, k]' * R * u[:, k]) for k = 1:horizon)) + 5 * ((x[:, horizon] - x_target)' * Q * (x[:, horizon] - x_target))
+    @objective(model, Min, sum((x[:, k]' * Q * x[:, k]) + (u[:, k]' * R * u[:, k]) for k = 1:horizon)) + ρ / 2 * ((x[:, horizon] - x_target)' * Q * (x[:, horizon] - x_target))
     #@objective(model, Min, sum((x[:, k]' * Q * x[:, k]) + (u[:, k]' * R * u[:, k]) for k = 1:horizon))
     # Solve the optimization problem
     optimize!(model)
 
     # Return the optimized control input for the next time step
-    return value.(u[:, 1])
+    return value.(x[:, horizon]), value.(u[:, 1])
 end
 
 """     do_mpc(x_0, u_0)
@@ -121,4 +126,7 @@ s = LinearSystem(
 )
 
 # Run the MPC simulation and plot results
-do_mpc(x, u, s)
+#do_mpc(x, u, s)
+
+
+end # module
