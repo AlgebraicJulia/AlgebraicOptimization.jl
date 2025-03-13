@@ -48,7 +48,7 @@ function nearest_section(s::CellularSheaf, x)
     b = d * x
 
     y, stats = cg(eL, Array(b))
-    println(stats)
+    #println(stats)
 
     return BlockArray(x - d' * y, s.vertex_stalks)
 end
