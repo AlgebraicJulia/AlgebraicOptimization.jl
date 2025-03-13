@@ -14,13 +14,13 @@ C = [1 0 0 0; 0 0 1 0]
 
 system = DiscreteLinearSystem(A, B, C)
 
-#Q = I(4)
-#Q[1, 1] = 0
-Q = zeros(4, 4)
+Q = I(4)
+Q[1, 1] = 0
+#Q = zeros(4, 4)
 
 R = I(2)
 
-N = 10
+N = 20
 
 control_bounds = [-2.0, 2.0]
 
@@ -38,7 +38,7 @@ x_init = BlockArray(5 * rand(12), c.vertex_stalks)
 prob = MultiAgentMPCProblem([params, params, params], c, x_init)
 alg = ADMM(2.0, 10)
 
-trajectory, controls = do_mpc!(prob, alg, 30)
+trajectory, controls = do_mpc!(prob, alg, 50)
 
 agent_1_trajectory = mapreduce(permutedims, vcat, [C * x[Block(1)] for x in trajectory])
 agent_2_trajectory = mapreduce(permutedims, vcat, [C * x[Block(2)] for x in trajectory])

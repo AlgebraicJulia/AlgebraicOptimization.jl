@@ -38,7 +38,7 @@ function lqr_model(Q::AbstractMatrix, R::AbstractMatrix, s::DiscreteLinearSystem
         @constraint(model, x[:, k+1] .== s.A * x[:, k] + s.B * u[:, k])
     end
 
-    @objective(model, Min, sum((x[:, k]' * Q * x[:, k] + u[:, k]' * R * u[:, k]) for k in 1:horizon-1) + ρ * (x[:, horizon] - x_target)' * (x[:, horizon] - x_target))
+    @objective(model, Min, sum((x[:, k]' * Q * x[:, k] + u[:, k]' * R * u[:, k]) for k in 1:horizon-1) + (ρ / 2) * (x[:, horizon] - x_target)' * (x[:, horizon] - x_target))
 
     return model
 end

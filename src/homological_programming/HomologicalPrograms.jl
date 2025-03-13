@@ -33,6 +33,7 @@ end
 function solve(h::MultiAgentMPCProblem, alg::ADMM)
     # Storage for optimal final state, control input, and dual variables
     λ = BlockArray(zeros(sum(h.sheaf.vertex_stalks)), h.sheaf.vertex_stalks)
+    z = BlockArray(zeros(sum(h.sheaf.vertex_stalks)), h.sheaf.vertex_stalks)
     x_star = BlockArray(zeros(sum(h.sheaf.vertex_stalks)), h.sheaf.vertex_stalks)
     u_dims = [size(p.R)[2] for p in h.objectives]
     u_star = BlockArray(zeros(sum(u_dims)), u_dims)
@@ -40,7 +41,7 @@ function solve(h::MultiAgentMPCProblem, alg::ADMM)
     for k in 1:alg.num_iters
         for (i, params) in enumerate(h.objectives)
             # Contruct the optimization model
-            model = lqr_model(params.Q, params.R, params.ls, h.x_curr[Block(i)], λ[Block(i)], params.horizon, params.control_bounds, alg.step_size)
+            model = lqr_model(params.Q, params.R, params.ls, h.x_curr[Block(i)], z[Block(i)] - λ[Block(i)], params.horizon, params.control_bounds, alg.step_size)
             set_silent(model)
             optimize!(model)
 
