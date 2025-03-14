@@ -60,7 +60,19 @@ Computes the projection of x onto the subspace satisfying
     δx = b
 where δ is the coboundary map of s.
 """
-function nearest_section(s::CellularSheaf, x, b) end
+function nearest_section(s::CellularSheaf, x, b)
+    d = coboundary_map(s)
+
+    eL = LinearOperator(d) * LinearOperator(d')
+
+    rhs = d * x - b
+
+    y, stats = cg(eL, rhs)
+    #println(stats)
+
+    return BlockArray(x - d' * y, s.vertex_stalks)
+
+end
 
 function Laplacian(s::CellularSheaf)
     return s.coboundary' * s.coboundary
