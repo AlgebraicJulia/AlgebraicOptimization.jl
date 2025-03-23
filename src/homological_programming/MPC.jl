@@ -11,7 +11,7 @@ using LinearAlgebra
 struct DiscreteLinearSystem
     A::AbstractMatrix
     B::AbstractMatrix
-    C::AbstractMatrix
+    C::AbstractMatrix     # Is this C actually used anywhere?
 end
 
 function (s::DiscreteLinearSystem)(x, u)
