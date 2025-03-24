@@ -21,7 +21,11 @@ struct MultiAgentMPCProblem <: HomologicalProgam
     objectives::Vector{MPCParams}
     sheaf::AbstractCellularSheaf
     x_curr::BlockArray
+    b::AbstractArray
 end
+
+MultiAgentMPCProblem(objectives::Vector{MPCParams}, sheaf::AbstractCellularSheaf, x_curr::BlockArray) = MultiAgentMPCProblem(objectives, sheaf, x_curr, zeros(sum(sheaf.edge_stalks)))
+
 
 abstract type OptimizationAlgorithm end
 
@@ -56,7 +60,7 @@ function solve(h::MultiAgentMPCProblem, alg::ADMM)
         end
 
         # project results onto a global section
-        z = nearest_section(h.sheaf, x_star + λ, [5, 5, -5, 5])
+        z = nearest_section(h.sheaf, x_star + λ, h.b)
 
         # dual update
         λ = λ + x_star - z
