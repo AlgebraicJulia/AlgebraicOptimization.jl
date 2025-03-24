@@ -56,7 +56,7 @@ function solve(h::MultiAgentMPCProblem, alg::ADMM)
         end
 
         # project results onto a global section
-        z = nearest_section(h.sheaf, x_star + λ)
+        z = nearest_section(h.sheaf, x_star + λ, ones(6))
 
         # dual update
         λ = λ + x_star - z

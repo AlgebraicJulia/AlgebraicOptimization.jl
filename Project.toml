@@ -7,6 +7,7 @@ version = "0.0.1"
 [deps]
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 BlockArrays = "8e7c35d0-a365-5155-bbbb-fb81a777f24e"
+CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 Catlab = "134e5e36-593f-5add-ad60-77f754baafbe"
 Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
@@ -27,6 +28,7 @@ Reexport = "189a3867-3050-52da-a836-e630ba90ab69"
 SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 SuiteSparseMatrixCollection = "ac199af8-68bc-55b8-82c4-7abd6f96ed98"
+Tables = "bd369af6-aec1-5ad0-b16a-f7cc5008161c"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [compat]
