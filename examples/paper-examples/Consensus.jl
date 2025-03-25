@@ -5,7 +5,7 @@ using BlockArrays
 using Plots
 using CSV, Tables
 
-# TEST CASE 1: Consensus, with x unconstarined and y constarined.
+# TEST CASE 1: Consensus, with x unconstrained and y constrained.
 
 # Set up each agent's dynamics: x' = Ax + Bu
 dt = 0.1  # Discretization step size
@@ -50,15 +50,21 @@ agent_1_trajectory = mapreduce(permutedims, vcat, [C * x[Block(1)] for x in traj
 agent_2_trajectory = mapreduce(permutedims, vcat, [C * x[Block(2)] for x in trajectory])
 agent_3_trajectory = mapreduce(permutedims, vcat, [C * x[Block(3)] for x in trajectory])
 
-p = plot(agent_1_trajectory[:, 1], agent_1_trajectory[:, 2])
-scatter!(agent_1_trajectory[:, 1], agent_1_trajectory[:, 2])
-scatter!([agent_1_trajectory[1, 1]], [agent_1_trajectory[1, 2]])
-plot!(agent_2_trajectory[:, 1], agent_2_trajectory[:, 2])
-scatter!(agent_2_trajectory[:, 1], agent_2_trajectory[:, 2])
-scatter!([agent_2_trajectory[1, 1]], [agent_2_trajectory[1, 2]])
-plot!(agent_3_trajectory[:, 1], agent_3_trajectory[:, 2])
-scatter!(agent_3_trajectory[:, 1], agent_3_trajectory[:, 2])
-scatter!([agent_3_trajectory[1, 1]], [agent_3_trajectory[1, 2]])
+p = plot(agent_1_trajectory[:, 1], agent_1_trajectory[:, 2], labels="", color=:red)
+scatter!(agent_1_trajectory[2:end, 1], agent_1_trajectory[2:end, 2], label="Agent 1", color=:red)
+scatter!([agent_1_trajectory[1, 1]], [agent_1_trajectory[1, 2]], label="", color=:cyan)
+
+plot!(agent_2_trajectory[:, 1], agent_2_trajectory[:, 2], labels="", color=:blue)
+scatter!(agent_2_trajectory[2:end, 1], agent_2_trajectory[2:end, 2], label="Agent 2", color=:blue)
+scatter!([agent_2_trajectory[1, 1]], [agent_2_trajectory[1, 2]], label="", color=:cyan)
+
+plot!(agent_3_trajectory[:, 1], agent_3_trajectory[:, 2], labels="", color=:green)
+scatter!(agent_3_trajectory[2:end, 1], agent_3_trajectory[2:end, 2], label="Agent 3", color=:green)
+scatter!([agent_3_trajectory[1, 1]], [agent_3_trajectory[1, 2]], label="Initial Positions", color=:cyan)
+
+title!("Consensus")
+xlabel!("x-position")
+ylabel!("y-position")
 
 # savefig(p, "/examples/loop")
 
