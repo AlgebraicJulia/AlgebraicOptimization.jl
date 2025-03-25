@@ -4,6 +4,7 @@ using LinearAlgebra
 using BlockArrays
 using Plots
 using CSV, Tables
+using .PaperPlotting
 
 # TEST CASE 1: Consensus, with x unconstrained and y constrained.
 
@@ -46,30 +47,4 @@ trajectory, controls = do_mpc!(prob, alg, num_iters)
 
 
 # Plot results
-agent_1_trajectory = mapreduce(permutedims, vcat, [C * x[Block(1)] for x in trajectory])
-agent_2_trajectory = mapreduce(permutedims, vcat, [C * x[Block(2)] for x in trajectory])
-agent_3_trajectory = mapreduce(permutedims, vcat, [C * x[Block(3)] for x in trajectory])
-
-p = plot(agent_1_trajectory[:, 1], agent_1_trajectory[:, 2], labels="", color=:red)
-scatter!(agent_1_trajectory[2:end, 1], agent_1_trajectory[2:end, 2], label="Agent 1", color=:red)
-scatter!([agent_1_trajectory[1, 1]], [agent_1_trajectory[1, 2]], label="", color=:cyan)
-
-plot!(agent_2_trajectory[:, 1], agent_2_trajectory[:, 2], labels="", color=:blue)
-scatter!(agent_2_trajectory[2:end, 1], agent_2_trajectory[2:end, 2], label="Agent 2", color=:blue)
-scatter!([agent_2_trajectory[1, 1]], [agent_2_trajectory[1, 2]], label="", color=:cyan)
-
-plot!(agent_3_trajectory[:, 1], agent_3_trajectory[:, 2], labels="", color=:green)
-scatter!(agent_3_trajectory[2:end, 1], agent_3_trajectory[2:end, 2], label="Agent 3", color=:green)
-scatter!([agent_3_trajectory[1, 1]], [agent_3_trajectory[1, 2]], label="Initial Positions", color=:cyan)
-
-title!("Consensus")
-xlabel!("x-position")
-ylabel!("y-position")
-
-# savefig(p, "/examples/loop")
-
-# CSV.write("./examples/ex1/traj1.csv", Tables.table(agent_1_trajectory))
-# CSV.write("./examples/ex1/traj2.csv", Tables.table(agent_2_trajectory))
-# CSV.write("./examples/ex1/traj3.csv", Tables.table(agent_3_trajectory))
-
-
+PaperPlotting.paper_plot_save_results(trajectory, C, "Consensus", 1, "x unconstrained and y constrained")

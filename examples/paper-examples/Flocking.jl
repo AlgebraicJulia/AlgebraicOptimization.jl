@@ -4,8 +4,9 @@ using LinearAlgebra
 using BlockArrays
 using Plots
 using CSV, Tables
+using .PaperPlotting
 
-# TEST CASE 2: "Accidental flocking". Consensus, with all variables unconstrained. Looks similar to flocking.
+# TEST CASE 1: "Accidental flocking". Consensus, with all variables unconstrained. Looks similar to flocking.
 
 # Set up each agent's dynamics: x' = Ax + Bu
 dt = 0.1  # Discretization step size
@@ -44,23 +45,5 @@ num_iters = 100
 trajectory, controls = do_mpc!(prob, alg, num_iters)
 
 
-# Plot results    TODO: Modularize this code
-agent_1_trajectory = mapreduce(permutedims, vcat, [C * x[Block(1)] for x in trajectory])
-agent_2_trajectory = mapreduce(permutedims, vcat, [C * x[Block(2)] for x in trajectory])
-agent_3_trajectory = mapreduce(permutedims, vcat, [C * x[Block(3)] for x in trajectory])
-
-p = plot(agent_1_trajectory[:, 1], agent_1_trajectory[:, 2], labels="", color=:red)
-scatter!(agent_1_trajectory[2:end, 1], agent_1_trajectory[2:end, 2], label="Agent 1", color=:red)
-scatter!([agent_1_trajectory[1, 1]], [agent_1_trajectory[1, 2]], label="", color=:cyan)
-
-plot!(agent_2_trajectory[:, 1], agent_2_trajectory[:, 2], labels="", color=:blue)
-scatter!(agent_2_trajectory[2:end, 1], agent_2_trajectory[2:end, 2], label="Agent 2", color=:blue)
-scatter!([agent_2_trajectory[1, 1]], [agent_2_trajectory[1, 2]], label="", color=:cyan)
-
-plot!(agent_3_trajectory[:, 1], agent_3_trajectory[:, 2], labels="", color=:green)
-scatter!(agent_3_trajectory[2:end, 1], agent_3_trajectory[2:end, 2], label="Agent 3", color=:green)
-scatter!([agent_3_trajectory[1, 1]], [agent_3_trajectory[1, 2]], label="Initial Positions", color=:cyan)
-
-title!("Flocking")
-xlabel!("x-position")
-ylabel!("y-position")
+# Plot results
+PaperPlotting.paper_plot_save_results(trajectory, C, "Flocking", 1, "accidental, all variables unconstrained")
