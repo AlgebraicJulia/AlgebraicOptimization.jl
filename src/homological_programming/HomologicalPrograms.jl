@@ -15,7 +15,10 @@ struct MPCParams
     ls::DiscreteLinearSystem
     control_bounds
     horizon
+    x_target::AbstractArray
 end
+
+MPCParams(Q, R, ls, cbs, N) = MPCParams(Q, R, ls, cbs, N, zeros(size(Q)[1]))
 
 struct MultiAgentMPCProblem <: HomologicalProgam
     objectives::Vector{MPCParams}
@@ -24,7 +27,12 @@ struct MultiAgentMPCProblem <: HomologicalProgam
     b::AbstractArray
 end
 
-MultiAgentMPCProblem(objectives::Vector{MPCParams}, sheaf::AbstractCellularSheaf, x_curr::BlockArray) = MultiAgentMPCProblem(objectives, sheaf, x_curr, zeros(sum(sheaf.edge_stalks)))
+MultiAgentMPCProblem(objectives::Vector{MPCParams}, sheaf::AbstractCellularSheaf, x_curr::BlockArray) =
+    MultiAgentMPCProblem(
+        objectives,
+        sheaf,
+        x_curr,
+        zeros(sum(sheaf.edge_stalks)))
 
 
 abstract type OptimizationAlgorithm end
@@ -45,7 +53,18 @@ function solve(h::MultiAgentMPCProblem, alg::ADMM)
     for k in 1:alg.num_iters
         for (i, params) in enumerate(h.objectives)
             # Contruct the optimization model
-            model = lqr_model(params.Q, params.R, params.ls, h.x_curr[Block(i)], z[Block(i)] - λ[Block(i)], params.horizon, params.control_bounds, alg.step_size)
+            model = nothing
+            if iszero(params.x_target)
+                model = lqr_model(params.Q, params.R, params.ls, h.x_curr[Block(i)], z[Block(i)] - λ[Block(i)], params.horizon, params.control_bounds, alg.step_size)
+            else
+                model = lq_tracking_model(
+                    params.Q, params.R, params.ls,
+                    h.x_curr[Block(i)],
+                    params.x_target,
+                    z[Block(i)] - λ[Block(i)],
+                    params.horizon, params.control_bounds, alg.step_size
+                )
+            end
             set_silent(model)
             optimize!(model)
 
@@ -96,5 +115,6 @@ function do_mpc!(h::MultiAgentMPCProblem, alg::ADMM, nsteps::Int)
     end
     return trajectory, controls
 end
+
 
 end

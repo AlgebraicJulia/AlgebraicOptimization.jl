@@ -43,7 +43,7 @@ function lqr_model(Q::AbstractMatrix, R::AbstractMatrix, s::DiscreteLinearSystem
     return model
 end
 
-function lq_tracking_model(Q::AbstractMatrix, R::AbstractMatrix, s::DiscreteLinearSystem, x0, x_target, horizon, control_bounds)
+function lq_tracking_model(Q::AbstractMatrix, R::AbstractMatrix, s::DiscreteLinearSystem, x0, x_target, dual_target, horizon, control_bounds, ρ)
     model = Model(Ipopt.Optimizer)
     set_silent(model)  # Suppress solver output
 
@@ -62,7 +62,7 @@ function lq_tracking_model(Q::AbstractMatrix, R::AbstractMatrix, s::DiscreteLine
         @constraint(model, x[:, k+1] .== s.A * x[:, k] + s.B * u[:, k])
     end
 
-    @objective(model, Min, sum(((x[:, k] - x_target)' * Q * (x[:, k] - x_target) + u[:, k]' * R * u[:, k]) for k in 1:horizon-1) + ρ * (x[:, horizon] - x_target)' * (x[:, horizon] - x_target))
+    @objective(model, Min, sum(((x[:, k] - x_target)' * Q * (x[:, k] - x_target) + u[:, k]' * R * u[:, k]) for k in 1:horizon-1) + ρ * (x[:, horizon] - dual_target)' * (x[:, horizon] - dual_target))
 
     return model
 end
