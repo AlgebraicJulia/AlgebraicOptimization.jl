@@ -46,9 +46,9 @@ function load_trajectory(trajectory_file)
     return CSV.File(trajectory_file) |> CSV.Tables.matrix
 end
 
-function empty_experiment_plot(title; x_label="x-position", y_label="y-position")
+function empty_experiment_plot(title; x_label="x", y_label="y")
     plt = plot()
-    plot!(plt, title=title, xlabel=x_label, ylabel=y_label) #=, thickness_scaling=2=#
+    plot!(plt, title=title, xlabel=x_label, ylabel=y_label, thickness_scaling=1.7)
     return plt
 end
 
