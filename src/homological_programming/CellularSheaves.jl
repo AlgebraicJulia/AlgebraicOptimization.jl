@@ -1,6 +1,7 @@
 module CellularSheaves
 
-export AbstractCellularSheaf, CellularSheaf, nearest_section, set_edge_maps!, Laplacian, apply_Laplacian, coboundary_map, apply_coboundary_map
+export AbstractCellularSheaf, CellularSheaf, PotentialSheaf, nearest_section, set_edge_maps!, Laplacian, apply_Laplacian, coboundary_map, apply_coboundary_map,
+    potential_objective
 
 using BlockArrays
 using SparseArrays
@@ -8,6 +9,7 @@ using LinearOperators
 using Krylov
 using LinearAlgebra
 using Graphs
+using ForwardDiff
 
 abstract type AbstractCellularSheaf end
 
@@ -23,12 +25,31 @@ function CellularSheaf(vertex_stalks::Vector{Int}, edge_stalks::Vector{Int})
     return CellularSheaf(vertex_stalks, edge_stalks, cb)
 end
 
-function constant_sheaf(g::Graph, dimension::Int)
-
-
+struct PotentialSheaf <: AbstractCellularSheaf
+    vertex_stalks::Vector{Int}
+    edge_stalks::Vector{Int}
+    coboundary::BlockArray
+    potentials::Vector{Function}
 end
 
-function set_edge_maps!(s::CellularSheaf, v1::Int, v2::Int, e::Int, rm1::AbstractMatrix, rm2::AbstractMatrix)
+function PotentialSheaf(vertex_stalks::Vector{Int}, edge_stalks::Vector{Int}, potentials)
+    cb = BlockArray(spzeros(sum(edge_stalks), sum(vertex_stalks)), edge_stalks, vertex_stalks)
+
+    return PotentialSheaf(vertex_stalks, edge_stalks, cb, potentials)
+end
+
+function potential_objective(s::PotentialSheaf)
+    total_potential(y) = sum([potential(y[Block(e)]) for (e, potential) in enumerate(s.potentials)])
+    return x -> total_potential(s.coboundary * x)
+end
+
+#=
+function constant_sheaf(g::Graph, dimension::Int)
+    s = CellularSheaf(repeat([dimension], nv(g)), repeat([dimension], ne(g)))
+    for 
+end=#
+
+function set_edge_maps!(s::AbstractCellularSheaf, v1::Int, v2::Int, e::Int, rm1::AbstractMatrix, rm2::AbstractMatrix)
     @assert size(rm1) == (s.edge_stalks[e], s.vertex_stalks[v1])
     @assert size(rm2) == (s.edge_stalks[e], s.vertex_stalks[v2])
     s.coboundary[Block(e), Block(v1)] = rm1
@@ -76,6 +97,16 @@ end
 
 function Laplacian(s::CellularSheaf)
     return s.coboundary' * s.coboundary
+end
+
+function apply_Laplacian(s::PotentialSheaf, x)
+    total_potential(y) = sum([potential(y[Block(e)]) for (e, potential) in enumerate(s.potentials)])
+    d = s.coboundary
+    return d' * ForwardDiff.gradient(total_potential, d * x)
+end
+
+function Laplacian(s::PotentialSheaf)
+
 end
 
 function apply_Laplacian(s::CellularSheaf, x)

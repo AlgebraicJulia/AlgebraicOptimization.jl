@@ -41,7 +41,7 @@ set_edge_maps!(c, 2, 3, 3, C, C)
 # Set up solver
 x_init = BlockArray(5 * rand(-1:0.1:1, 12), c.vertex_stalks)
 prob = MultiAgentMPCProblem([params1, params2, params3], c, x_init)
-alg = ADMM(2.0, 2)
+alg = ADMM(2.0, 10)
 num_iters = 100
 
 
