@@ -1,7 +1,7 @@
 module OpenFlowGraphs
 
 export FlowGraph, underlying_graph, FG, OpenFG, to_problem,
-    node_incidence_matrix, dual_decomposition, nvertices, nedges
+    node_incidence_matrix, dual_decomposition, nvertices, nedges, random_open_flowgraph
 
 using ..FinSetAlgebras
 import ..FinSetAlgebras: hom_map, laxator
@@ -12,6 +12,8 @@ import Catlab: oapply, dom, src, tgt
 using Test
 using Optim
 using ForwardDiff
+using StatsBase
+using Random
 
 struct FlowGraph
     nodes::FinSet
@@ -73,9 +75,9 @@ function node_incidence_matrix(g::FlowGraph)
         if src(g, e) == tgt(g, e) && tgt(g, e) == v
             continue
         elseif src(g,e) == v
-            A[v,e] = 1
-        elseif tgt(g,e) == v
             A[v,e] = -1
+        elseif tgt(g,e) == v
+            A[v,e] = 1
         end
     end
     return A
@@ -110,5 +112,53 @@ function dual_decomposition(og::Open{FlowGraph}, γ)
     end
     return Open{Optimizer}(og.S, dual_decomp_dynamics, og.m)
 end
+
+function random_connected_graph(nv, p)
+    g = erdos_renyi(Graph, nv, p)
+    while(length(connected_components(g))>1)
+        g = erdos_renyi(Graph, nv, p)
+    end
+    return g
+end
+
+g = random_connected_graph(10, .2)
+fg = FlowGraph(g, [], [])
+@test underlying_graph(fg) == g
+
+function random_quadratic()
+    a = rand()
+    b = rand()*rand([-1,1])
+    c = rand()*rand([-1,1])
+    return x -> a*x^2 + b*x + c
+    #return x -> x^2
+end
+
+function random_flow(n::Int, n_nonzeros::Int)
+    u = 2*rand(n_nonzeros) .- 1
+    x = [(u[1]-u[n_nonzeros])/2; diff(u) ./ 2]
+    res = vcat(x, zeros(n - n_nonzeros))
+    return shuffle(res)
+end
+
+function random_flow_graph(N::Int, connectivity)
+    g = random_connected_graph(N, connectivity)
+    E = ne(g)
+    flow_costs = [random_quadratic() for i in 1:E]
+    flows = random_flow(N, 4)
+    return FlowGraph(g, flow_costs, flows)
+end
+
+function random_injection(dom::Int, codom::Int)
+    f = sample(1:codom, dom, replace=false)
+    return FinFunction(sort(f), codom)
+end
+
+function random_open_flowgraph(n_vertices, p, n_boundary)
+    return Open{FlowGraph}(FinSet(n_vertices), 
+        random_flow_graph(n_vertices, p), 
+        random_injection(n_boundary, n_vertices))
+end
+
+
 
 end

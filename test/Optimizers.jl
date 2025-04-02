@@ -1,5 +1,4 @@
-using AlgebraicOptimization.Optimizers
-using AlgebraicOptimization.FinSetAlgebras
+using AlgebraicOptimization
 using Catlab
 using Test
 
@@ -33,8 +32,8 @@ tsteps = 100
 r1 = simulate(discretization_of_composites, x0, tsteps)
 r2 = simulate(composite_of_discretizations, x0, tsteps)
 
-println(r1)
-println(r2)
+#println(r1)
+#println(r2)
 
 @test r1 ≈ r2
 

@@ -1,12 +1,11 @@
-""" Some description of ths package
-"""
 module AlgebraicOptimization
 
-include("FinSetAlgebras.jl")
-include("Optimizers.jl")
-include("Objectives.jl")
-include("OpenFlowGraphs.jl")
-#include("OpenProblems.jl")
-#include("FlowGraphs.jl")
+using Reexport
+
+include("compositional_programming/CompositionalProgramming.jl")
+include("homological_programming/HomologicalProgramming.jl")
+
+@reexport using .CompositionalProgramming
+@reexport using .HomologicalProgramming
 
 end
