@@ -22,6 +22,12 @@ end
 
 MPCParams(Q, R, ls, cbs, N) = MPCParams(Q, R, ls, cbs, N, zeros(size(Q)[1]))
 
+
+struct NonLinearHomologicalProgram <: HomologicalProgam
+    objectives::Vector{JuMP.Model}
+    sheaf::PotentialSheaf
+end
+
 struct MultiAgentMPCProblem <: HomologicalProgam
     objectives::Vector{MPCParams}
     sheaf::AbstractCellularSheaf

@@ -8,7 +8,7 @@ const generated_dir = joinpath(@__DIR__, "src", "generated")
 using AlgebraicOptimization
 
 # disabled literate because we have no literate files.
-const no_literate = true # "--no-literate" in ARGS
+const no_literate = false # "--no-literate" in ARGS
 if !no_literate
   @info "Building Literate.jl docs"
 
@@ -42,9 +42,9 @@ makedocs(
   checkdocs=:none,
   pages=Any[
     "AlgebraicOptimization.jl"=>"index.md",
-    # "Examples"=>Any[
-    #   "generated/literate_example.md",
-    # ],
+    "Examples"=>Any[
+      "generated/literate_example.md",
+    ],
     "Library Reference"=>"api.md",
   ]
 )
