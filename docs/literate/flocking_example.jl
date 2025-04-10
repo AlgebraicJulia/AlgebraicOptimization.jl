@@ -10,7 +10,7 @@
 # position components. Each agents’ objective is to minimize
 # total control activation. Additionally, a designated leader
 # agent tracks a constant rightward velocity vector. The results
-# of this controller run for 65 iterations are shown in Fig. 3.c.
+# of this controller run for 65 iterations are shown below.
 # Computing the distance between each agent confirms that
 # they reached the desired pairwise distance of √5.
 #
@@ -23,6 +23,7 @@ include("../../../examples/paper-examples/PaperPlotting.jl")
 using .PaperPlotting
 
 # Set up each agent's dynamics: x(t+1) = Ax(t) + Bu(t)
+#
 # dt = discretization step size
 
 dt = 0.1
@@ -45,7 +46,9 @@ params1 = MPCParams(Q_leader, R, system, control_bounds, N, [0.0, 1.0, 0.0, 0.0]
 params2 = params3 = MPCParams(Q_follower, R, system, control_bounds, N)
 
 # Define the potential functions
+#
 # q(x) = (x' * x - 5.0)^2
+#
 # p(x) = [x[2], x[4]]' * [x[2], x[4]] + q([x[1], x[3]])
 
 q(x) = (x' * x - 5.0)^2
