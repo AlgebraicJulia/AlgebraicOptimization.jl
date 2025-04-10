@@ -45,6 +45,7 @@ makedocs(
     "Examples"=>Any[
       "generated/literate_example.md",
       "generated/flocking_example.md",
+      "generated/consensus_example.md",
     ],
     "Library Reference"=>"api.md",
   ]
