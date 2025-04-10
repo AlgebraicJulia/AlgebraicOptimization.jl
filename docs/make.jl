@@ -44,6 +44,7 @@ makedocs(
     "AlgebraicOptimization.jl"=>"index.md",
     "Examples"=>Any[
       "generated/literate_example.md",
+      "generated/flocking_example.md",
     ],
     "Library Reference"=>"api.md",
   ]

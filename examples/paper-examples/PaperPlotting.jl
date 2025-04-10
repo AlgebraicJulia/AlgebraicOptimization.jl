@@ -118,7 +118,7 @@ function paper_plot_save_results(trajectory, C, type_str, test_case, additonal_s
 
 end
 
-function plot_trajectories(trajectory, C, type)
+function plot_trajectories(trajectory, C, triangle=false)
     # split up trajectories
     t1 = mapreduce(permutedims, vcat, [C * x[BlockArrays.Block(1)] for x in trajectory])
     t2 = mapreduce(permutedims, vcat, [C * x[BlockArrays.Block(2)] for x in trajectory])
@@ -126,15 +126,18 @@ function plot_trajectories(trajectory, C, type)
 
     plt = PaperPlotting.empty_experiment_plot("")
 
-    # Make the following 3 lines dynamic *not hard coded 1:65* based on the full lengths
-    # PaperPlotting.plot_trajectory!(plt, t1[1:65, :], "", :hexagon, PaperPlotting.orange)
-    # PaperPlotting.plot_trajectory!(plt, t2[1:65, :], "", :circle, PaperPlotting.blue)
-    # PaperPlotting.plot_trajectory!(plt, t3[1:65, :], "", :diamond, PaperPlotting.green)
+    # plot trajectories
     PaperPlotting.plot_trajectory!(plt, t1, "", :hexagon, PaperPlotting.orange)
     PaperPlotting.plot_trajectory!(plt, t2, "", :circle, PaperPlotting.blue)
     PaperPlotting.plot_trajectory!(plt, t3, "", :diamond, PaperPlotting.green)
 
-    savefig(plt, "examples/paper-examples/figures/more_flocking.png")
+    # plot triangles
+    if triangle
+        PaperPlotting.add_triangle!(plt, t1[end, :], t2[end, :], t3[end, :], PaperPlotting.purple)
+    end
+
+    # show plot
+    plot(plt)
 end
 
 end
