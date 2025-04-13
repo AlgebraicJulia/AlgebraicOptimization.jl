@@ -67,4 +67,4 @@ num_iters = 100
 # Finally, we run the solver, which outputs the optimized trajectory and controls for each agent.
 trajectory, controls = do_mpc!(prob, alg, num_iters)
 
-PaperPlotting.plot_trajectories(trajectory, [1 0 0 0; 0 0 1 0], "more-consensus")
+PaperPlotting.plot_trajectories(trajectory, [1 0 0 0; 0 0 1 0])

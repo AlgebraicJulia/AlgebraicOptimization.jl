@@ -3,16 +3,16 @@
 # For this example, agents implement the
 # standard flocking goal of reaching consensus in velocities
 # while staying a fixed distance away from all other agents.
-# The constant sheaf R⁴ on a fully connected communication
+# The constant sheaf $\underline{\R}^4$ on a fully connected communication
 # topology along with potential functions summing the stan-
 # dard consensus potential function on the velocity components
-# and the fixed distance potential function with r² = 5 on the
+# and the fixed distance potential function with $r^2 = 5$ on the
 # position components. Each agents’ objective is to minimize
 # total control activation. Additionally, a designated leader
 # agent tracks a constant rightward velocity vector. The results
 # of this controller run for 65 iterations are shown below.
 # Computing the distance between each agent confirms that
-# they reached the desired pairwise distance of √5.
+# they reached the desired pairwise distance of $\sqrt{5}$.
 #
 using Test
 using AlgebraicOptimization
@@ -22,11 +22,9 @@ using Plots
 include("../../../examples/paper-examples/PaperPlotting.jl")
 using .PaperPlotting
 
-# Set up each agent's dynamics: x(t+1) = Ax(t) + Bu(t)
-#
-# dt = discretization step size
+# Set up each agent's dynamics: $x(t+1) = Ax(t) + Bu(t)$
 
-dt = 0.1
+dt = 0.1 # Discretization step size
 A = [1 dt 0 0; 0 1 0 0; 0 0 1 dt; 0 0 0 1]
 B = [0 0; dt 0; 0 0; 0 dt]
 C = [1 0 0 0; 0 0 1 0]
@@ -47,9 +45,9 @@ params2 = params3 = MPCParams(Q_follower, R, system, control_bounds, N)
 
 # Define the potential functions
 #
-# q(x) = (x' * x - 5.0)^2
+# $q(x) = (x' * x - 5.0)^2$
 #
-# p(x) = [x[2], x[4]]' * [x[2], x[4]] + q([x[1], x[3]])
+# $p(x) = [x[2], x[4]]' * [x[2], x[4]] + q([x[1], x[3]])$
 
 q(x) = (x' * x - 5.0)^2
 p(x) = [x[2], x[4]]' * [x[2], x[4]] + q([x[1], x[3]])
@@ -75,4 +73,4 @@ trajectory, controls = do_mpc!(prob, alg, num_iters)
 
 # Plot results
 
-PaperPlotting.plot_trajectories(trajectory, C, false)
+PaperPlotting.plot_trajectories(trajectory, C)

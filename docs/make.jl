@@ -46,6 +46,7 @@ makedocs(
       "generated/literate_example.md",
       "generated/flocking_example.md",
       "generated/consensus_example.md",
+      "generated/moving_formation_example.md",
     ],
     "Library Reference"=>"api.md",
   ]

@@ -118,7 +118,7 @@ function paper_plot_save_results(trajectory, C, type_str, test_case, additonal_s
 
 end
 
-function plot_trajectories(trajectory, C, triangle=false)
+function plot_trajectories(trajectory, C, triangle=false, moving_triangle=false)
     # split up trajectories
     t1 = mapreduce(permutedims, vcat, [C * x[BlockArrays.Block(1)] for x in trajectory])
     t2 = mapreduce(permutedims, vcat, [C * x[BlockArrays.Block(2)] for x in trajectory])
@@ -126,15 +126,21 @@ function plot_trajectories(trajectory, C, triangle=false)
 
     plt = PaperPlotting.empty_experiment_plot("")
 
-    # plot trajectories
-    PaperPlotting.plot_trajectory!(plt, t1, "", :hexagon, PaperPlotting.orange)
-    PaperPlotting.plot_trajectory!(plt, t2, "", :circle, PaperPlotting.blue)
-    PaperPlotting.plot_trajectory!(plt, t3, "", :diamond, PaperPlotting.green)
-
     # plot triangles
     if triangle
         PaperPlotting.add_triangle!(plt, t1[end, :], t2[end, :], t3[end, :], PaperPlotting.purple)
     end
+
+    if moving_triangle
+        PaperPlotting.add_triangle!(plt, t1[1, :], t2[1, :], t3[1, :], PaperPlotting.purple)
+        PaperPlotting.add_triangle!(plt, t1[77, :], t2[77, :], t3[77, :], PaperPlotting.purple)
+        PaperPlotting.add_triangle!(plt, t1[end, :], t2[end, :], t3[end, :], PaperPlotting.purple)
+    end
+
+    # plot trajectories
+    PaperPlotting.plot_trajectory!(plt, t1, "", :hexagon, PaperPlotting.orange)
+    PaperPlotting.plot_trajectory!(plt, t2, "", :circle, PaperPlotting.blue)
+    PaperPlotting.plot_trajectory!(plt, t3, "", :diamond, PaperPlotting.green)
 
     # show plot
     plot(plt)
