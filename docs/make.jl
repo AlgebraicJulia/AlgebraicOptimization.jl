@@ -48,6 +48,9 @@ makedocs(
       "generated/consensus_example.md",
       "generated/moving_formation_example.md",
     ],
+    "Cellular Sheaf Macro"=>Any[
+      "generated/sheaf_macro.md"
+    ],
     "Library Reference"=>"api.md",
   ]
 )
