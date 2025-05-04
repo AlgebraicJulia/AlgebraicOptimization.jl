@@ -51,7 +51,8 @@ trajectory, controls = do_mpc!(prob, alg, num_iters)
 
 
 # Plot results
-PaperPlotting.paper_plot_save_results(trajectory, C, "Flocking", 6, "Fixed Distances")
+PaperPlotting.plot_trajectories(trajectory, C, "Flocking")
+#PaperPlotting.paper_plot_save_results(trajectory, C, "Flocking", 6, "Fixed Distances")
 
 #=
 # Set up each agent's dynamics: x(t+1) = Ax(t) + Bu(t)

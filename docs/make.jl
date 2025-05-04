@@ -42,6 +42,12 @@ makedocs(
   checkdocs=:none,
   pages=Any[
     "AlgebraicOptimization.jl"=>"index.md",
+    "Examples"=>Any[
+      "generated/literate_example.md",
+      "generated/flocking_example.md",
+      "generated/consensus_example.md",
+      "generated/moving_formation_example.md",
+    ],
     "Cellular Sheaf Macro"=>Any[
       "generated/sheaf_macro.md"
     ],

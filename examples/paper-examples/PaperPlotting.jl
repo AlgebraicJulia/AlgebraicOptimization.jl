@@ -1,7 +1,7 @@
 module PaperPlotting
 
 export paper_plot_save_results, postprocess_trajectory, save_trajectories, load_trajectory,
-    empty_experiment_plot, plot_trajectory!, blue, orange, green, beige, purple, add_triangle!
+    empty_experiment_plot, plot_trajectory!, blue, orange, green, beige, purple, add_triangle!, plot_trajectories
 
 using Test
 using AlgebraicOptimization
@@ -116,6 +116,34 @@ function paper_plot_save_results(trajectory, C, type_str, test_case, additonal_s
     CSV.write("./examples/paper-examples/$(type_str)/$(test_case)/$(type_str)$(test_case)_traj2_$(now).csv", Tables.table(agent_2_trajectory))
     CSV.write("./examples/paper-examples/$(type_str)/$(test_case)/$(type_str)$(test_case)_traj3_$(now).csv", Tables.table(agent_3_trajectory))
 
+end
+
+function plot_trajectories(trajectory, C, triangle=false, moving_triangle=false)
+    # split up trajectories
+    t1 = mapreduce(permutedims, vcat, [C * x[BlockArrays.Block(1)] for x in trajectory])
+    t2 = mapreduce(permutedims, vcat, [C * x[BlockArrays.Block(2)] for x in trajectory])
+    t3 = mapreduce(permutedims, vcat, [C * x[BlockArrays.Block(3)] for x in trajectory])
+
+    plt = PaperPlotting.empty_experiment_plot("")
+
+    # plot triangles
+    if triangle
+        PaperPlotting.add_triangle!(plt, t1[end, :], t2[end, :], t3[end, :], PaperPlotting.purple)
+    end
+
+    if moving_triangle
+        PaperPlotting.add_triangle!(plt, t1[1, :], t2[1, :], t3[1, :], PaperPlotting.purple)
+        PaperPlotting.add_triangle!(plt, t1[77, :], t2[77, :], t3[77, :], PaperPlotting.purple)
+        PaperPlotting.add_triangle!(plt, t1[end, :], t2[end, :], t3[end, :], PaperPlotting.purple)
+    end
+
+    # plot trajectories
+    PaperPlotting.plot_trajectory!(plt, t1, "", :hexagon, PaperPlotting.orange)
+    PaperPlotting.plot_trajectory!(plt, t2, "", :circle, PaperPlotting.blue)
+    PaperPlotting.plot_trajectory!(plt, t3, "", :diamond, PaperPlotting.green)
+
+    # show plot
+    plot(plt)
 end
 
 end
