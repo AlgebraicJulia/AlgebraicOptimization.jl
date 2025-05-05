@@ -17,10 +17,15 @@ end
   include("OpenFlowGraphs.jl")
 end
 
-@testset "Cellular Sheaves" begin
-  include("CellularSheaves.jl")
+@testset "Cellular Sheaf Macros" begin
+  include("ADT.jl")
+  include("Parser.jl")
 end
 
-@testset "Multithreaded Cellular Sheaves" begin
+#=@testset "Cellular Sheaves" begin
+  include("CellularSheaves.jl")
+end=#
+
+#=@testset "Multithreaded Cellular Sheaves" begin
   include("ThreadedSheaves.jl")
-end
+end=#

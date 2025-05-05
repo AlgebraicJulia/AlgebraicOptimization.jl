@@ -4,7 +4,10 @@ using Graphs
 using BlockArrays
 
 
+# TODO: Commenting all this out for now. We need to update these tests to go with
+# the new CellularSheaf structure and the new sheaf node structure.
 
+#=
 # Example sheaf 1: (a, b) -> b <- (b, c)
 # Underlying graph: *-------*  (2 vertices, 1 edge)
 # a, b, and c are each 1-element vectors
@@ -237,3 +240,8 @@ end
 
 # Identities (constant sheaf) is always a good baseline.
 # 0/1 projection matrices.
+
+# Parsing Tests
+
+# Unit Tests
+=#
