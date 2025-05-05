@@ -17,7 +17,7 @@ include("Parser.jl")
 #@reexport using .DistributedSheaves
 #@reexport using .ThreadedSheaves
 @reexport using .HomologicalPrograms
-using .CellularSheafTerm
+@reexport using .CellularSheafTerm
 @reexport using .CellularSheafParser: @cellular_sheaf
 
 end

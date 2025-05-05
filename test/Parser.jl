@@ -1,5 +1,5 @@
 using Test
-using AlgebraicOptimization 
+using AlgebraicOptimization
 
 # Equality Checking Helper Function
 function Base.:(==)(sheafOne::CellularSheaf, sheafTwo::CellularSheaf)
@@ -78,7 +78,7 @@ A = [1 0 0 0]
 B = [1 0 0 0]
 C = [1 0 0 0]
 
-@test_throws ErrorException("Line A(x) == A(x) == C(z) is malformed.") @cellular_sheaf A, B, C begin
+@test_throws SheafSyntaxError("Line A(x) == A(x) == C(z) is malformed.") @cellular_sheaf A, B, C begin
     x::Stalk{4}, y::Stalk{4}, z::Stalk{4}
 
     A(x) ==
@@ -92,10 +92,10 @@ A = [1 0 0 0]
 B = [1 0 0 0]
 C = [1 0 0 0]
 
-@test_throws ErrorException("Term B / y is an invalid product.\nA product is of form A*x or A(x).") @cellular_sheaf A, B, C begin
+@test_throws SheafSyntaxError("Term B / y is an invalid product.\nA product is of form A*x or A(x).") @cellular_sheaf A, B, C begin
     x::Stalk{4}, y::Stalk{4}, z::Stalk{4}
 
-    A(x) == B/y
+    A(x) == B / y
     A(x) == C(z)
     B(y) == C(z)
 
@@ -106,7 +106,7 @@ A = [1 0 0 0]
 B = [1 0 0 0]
 C = "meep"
 
-@test_throws ErrorException("Restriction map \"meep\" is not a matrix.") @cellular_sheaf A, B, C begin
+@test_throws SheafTypeError("Restriction map \"meep\" is not a matrix.") @cellular_sheaf A, B, C begin
     x::Stalk{4}, y::Stalk{4}, z::Stalk{4}
 
     A(x) == B(y)
@@ -120,10 +120,8 @@ A = [1 0 0 0]
 B = [1 0 0 0]
 C = [1 0 0 0]
 
-@test_throws ErrorException("Variable declaration: A(x) == B(y) format is invalid.") @cellular_sheaf A, B, C begin
-    x::Stalk{4}, y::Stalk{4},
-
-    A(x) == B(y)
+@test_throws SheafSyntaxError("Variable declaration: A(x) == B(y) format is invalid.") @cellular_sheaf A, B, C begin
+    x::Stalk{4}, y::Stalk{4}, A(x) == B(y)
     A(x) == C(z)
     B(y) == C(z)
 
@@ -131,7 +129,7 @@ end
 
 # Test
 
-@test_throws ErrorException("No restriction maps were passed into the macro.") @macroexpand @cellular_sheaf begin
+@test_throws SheafArgumentError("No restriction maps were passed into the macro.") @macroexpand @cellular_sheaf begin
     x::Stalk{4}, y::Stalk{4}, z::Stalk{4}
 
     A(x) == B(y)

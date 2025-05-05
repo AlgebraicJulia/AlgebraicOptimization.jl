@@ -31,6 +31,9 @@ a shared edge stalk.
 """
 module CellularSheafTerm
 
+export CellularSheafExpr, Declaration, UntypedDeclaration, TypedDeclaration, RestrictionMap, VertexStalk, Product, Equation,
+    SheafError, SheafSyntaxError, SheafDeclarationError, SheafTypeError, SheafArgumentError, SheafDimensionMismatchError
+
 using MLStyle: @data, @match
 using ..CellularSheaves
 
@@ -101,8 +104,8 @@ map that is inherited.
 Declaration
 
 @data Declaration <: AbstractSheafTerm begin
-    UntypedDeclaration(name::Symbol, val::Union{Matrix, Nothing})
-    TypedDeclaration(name::Symbol, type::TypeName, val::Union{Matrix, Nothing})  
+    UntypedDeclaration(name::Symbol, val::Union{Matrix,Nothing})
+    TypedDeclaration(name::Symbol, type::TypeName, val::Union{Matrix,Nothing})
 end
 # The only declaration that carries a value is a restriction map w/ a matrix value.
 
@@ -194,10 +197,10 @@ It performs crucial semantic tasks such as:
 """
 function construct(expr::CellularSheafExpr)
     # Dictionaries for storing constructor parameters
-    vertex_dims = Int[] 
-    vertex_to_index = Dict{Symbol, Int}() 
+    vertex_dims = Int[]
+    vertex_to_index = Dict{Symbol,Int}()
 
-    edge_to_index = Dict{Equation, Int}()
+    edge_to_index = Dict{Equation,Int}()
     edge_dims = Int[]
 
     # Generate variable look up table
@@ -213,21 +216,21 @@ function construct(expr::CellularSheafExpr)
             # Store mappiong for construction
             vertex_to_index[declaration.name] = length(vertex_dims)
         end
-    end    
+    end
 
-   # Construct Cellular Sheaf
-   c = CellularSheaf(vertex_dims, edge_dims)
+    # Construct Cellular Sheaf
+    c = CellularSheaf(vertex_dims, edge_dims)
 
-   # Construct edge maps
-   for eq in expr.equations
-       set_edge_maps!(c, vertex_to_index[eq.lhs.vertex_stalk.name], vertex_to_index[eq.rhs.vertex_stalk.name], edge_to_index[eq], eq.lhs.restriction_map.matrix, eq.rhs.restriction_map.matrix)
-   end
+    # Construct edge maps
+    for eq in expr.equations
+        set_edge_maps!(c, vertex_to_index[eq.lhs.vertex_stalk.name], vertex_to_index[eq.rhs.vertex_stalk.name], edge_to_index[eq], eq.lhs.restriction_map.matrix, eq.rhs.restriction_map.matrix)
+    end
 
-   return c
+    return c
 end
 
 function generate_look_up_table(context::Vector{Declaration})
-    look_up_table = Dict{Symbol, Declaration}()
+    look_up_table = Dict{Symbol,Declaration}()
 
     for declaration in context
         # Confirm that the type used is a supported type (Current Supported Types: "Stalk" [Vertex Stalk])
@@ -236,7 +239,7 @@ function generate_look_up_table(context::Vector{Declaration})
         end
 
         # Confirm there are no variable redeclarations
-        name =  @match declaration begin
+        name = @match declaration begin
             UntypedDeclaration(name, _) => name
             TypedDeclaration(name, _, _) => name
         end
@@ -251,7 +254,7 @@ function generate_look_up_table(context::Vector{Declaration})
     return look_up_table
 end
 
-function decorate_equations(equations::Vector{Equation}, table::Dict{Symbol, Declaration}, edge_dims::Vector{Int}, edge_mapping::Dict{Equation, Int})
+function decorate_equations(equations::Vector{Equation}, table::Dict{Symbol,Declaration}, edge_dims::Vector{Int}, edge_mapping::Dict{Equation,Int})
     for eq in equations
         # Extract restriction maps & vertices
         rm_lhs = eq.lhs.restriction_map
@@ -278,13 +281,13 @@ function decorate_equations(equations::Vector{Equation}, table::Dict{Symbol, Dec
     end
 end
 
-function infer_edge(eq::Equation, edge_dims::Vector{Int}, edge_mapping::Dict{Equation, Int})
+function infer_edge(eq::Equation, edge_dims::Vector{Int}, edge_mapping::Dict{Equation,Int})
     # Extract restriction maps & vertices
     rm_lhs = eq.lhs.restriction_map
     rm_rhs = eq.rhs.restriction_map
     vs_lhs = eq.lhs.vertex_stalk
     vs_rhs = eq.rhs.vertex_stalk
-    
+
     # Ensure restriction map can be multiplied by vertex stalk
     if (size(rm_lhs.matrix)[2] == vs_lhs.dim) && (size(rm_rhs.matrix)[2] == vs_rhs.dim)
         if size(rm_lhs.matrix)[1] == size(rm_rhs.matrix)[1]
@@ -292,10 +295,10 @@ function infer_edge(eq::Equation, edge_dims::Vector{Int}, edge_mapping::Dict{Equ
             edge_mapping[eq] = length(edge_dims)
         else
             throw(SheafDimensionMismatchError(
-            """Inferred edge stalk on relation: "$(rm_lhs.name)$(vs_lhs.name) = $(rm_rhs.name)$(vs_rhs.name)" is inconsistent.
-                Left restriction map maps dimension $(size(rm_lhs.matrix)[2]) to dimension $(size(rm_lhs.matrix)[1]).
-                Right restriction map maps dimension $(size(rm_rhs.matrix)[2]) to dimension $(size(rm_rhs.matrix)[1]).
-            """))
+                """Inferred edge stalk on relation: "$(rm_lhs.name)$(vs_lhs.name) = $(rm_rhs.name)$(vs_rhs.name)" is inconsistent.
+                    Left restriction map maps dimension $(size(rm_lhs.matrix)[2]) to dimension $(size(rm_lhs.matrix)[1]).
+                    Right restriction map maps dimension $(size(rm_rhs.matrix)[2]) to dimension $(size(rm_rhs.matrix)[1]).
+                """))
         end
     else
         if size(rm_lhs.matrix)[2] != vs_lhs.dim
@@ -306,7 +309,7 @@ function infer_edge(eq::Equation, edge_dims::Vector{Int}, edge_mapping::Dict{Equ
     end
 end
 
-function assert_variable_declaration(name::Symbol, table::Dict{Symbol, Declaration}, eq::Equation)
+function assert_variable_declaration(name::Symbol, table::Dict{Symbol,Declaration}, eq::Equation)
     if !haskey(table, name)
         throw(SheafDeclarationError("Restriction map \"$name\" in \"$(eq.lhs.restriction_map.name)$(eq.lhs.vertex_stalk.name) = $(eq.rhs.restriction_map.name)$(eq.rhs.vertex_stalk.name)\" is undefined."))
     end
