@@ -16,6 +16,7 @@ end
 struct HomologicalProgram <: AbstractHomologicalProgam
     objectives::Vector{Function}
     sheaf::AbstractCellularSheaf
+    b::AbstractArray
 end
 
 
@@ -23,19 +24,20 @@ end
 function solve(h::HomologicalProgram, alg::ADMM)
     y = BlockArray(zeros(sum(h.sheaf.vertex_stalks)), h.sheaf.vertex_stalks)
     z = BlockArray(zeros(sum(h.sheaf.vertex_stalks)), h.sheaf.vertex_stalks)
+    x_star = BlockArray(zeros(sum(h.sheaf.vertex_stalks)), h.sheaf.vertex_stalks)
 
     regularized_objectives = [(z, y) -> (x -> f(x) + alg.step_size / 2 * (x - z + y)' * (x - z + y)) for f in h.objectives]
 
     for k in 1:alg.num_iters
         for (i, f) in enumerate(regularized_objectives)
             res_x = optimize(f(z[Block(i)], y[Block(i)]), zeros(h.sheaf.vertex_stalks[i]), LBFGS(); autodiff=:forward)
-
+            x_star[Block(i)] = Optim.minimizer(res_x)
         end
+        z = nearest_section(h.sheaf, x_star + y, h.b)
+
+        y = y + x_star - z
     end
-
-
-
-
+    return z, y
 end
 
 end
