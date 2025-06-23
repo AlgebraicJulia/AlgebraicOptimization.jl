@@ -1,6 +1,6 @@
 module HomologicalPrograms
 
-export MultiAgentMPCProblem, MPCParams, ADMM, solve, do_mpc!, NonConvexADMM
+export MultiAgentMPCProblem, MPCParams, ADMM, solve, do_mpc!, NonConvexADMM, HomologicalProgram, AbstractHomologicalProgram
 
 using BlockArrays
 using LinearAlgebra
@@ -8,39 +8,6 @@ using JuMP
 using Optim
 using ..CellularSheaves
 using ..MPC
-
-abstract type HomologicalProgam end
-
-struct MPCParams
-    Q::Matrix
-    R::Matrix
-    ls::DiscreteLinearSystem
-    control_bounds
-    horizon
-    x_target::AbstractArray
-end
-
-MPCParams(Q, R, ls, cbs, N) = MPCParams(Q, R, ls, cbs, N, zeros(size(Q)[1]))
-
-
-struct NonLinearHomologicalProgram <: HomologicalProgam
-    objectives::Vector{JuMP.Model}
-    sheaf::PotentialSheaf
-end
-
-struct MultiAgentMPCProblem <: HomologicalProgam
-    objectives::Vector{MPCParams}
-    sheaf::AbstractCellularSheaf
-    x_curr::BlockArray
-    b::AbstractArray
-end
-
-MultiAgentMPCProblem(objectives::Vector{MPCParams}, sheaf::AbstractCellularSheaf, x_curr::BlockArray) =
-    MultiAgentMPCProblem(
-        objectives,
-        sheaf,
-        x_curr,
-        zeros(sum(sheaf.edge_stalks)))
 
 
 abstract type OptimizationAlgorithm end
@@ -56,6 +23,73 @@ struct NonConvexADMM <: OptimizationAlgorithm
     gd_step_size::Real
     gd_num_iters::Int
 end
+
+
+abstract type AbstractHomologicalProgram end
+
+# Stuff for generic homological programs
+
+struct HomologicalProgram <: AbstractHomologicalProgram
+    objectives::Vector{Function}
+    sheaf::AbstractCellularSheaf
+    b::AbstractArray
+end
+
+
+
+function solve(h::HomologicalProgram, alg::ADMM)
+    y = BlockArray(zeros(sum(h.sheaf.vertex_stalks)), h.sheaf.vertex_stalks)
+    z = BlockArray(zeros(sum(h.sheaf.vertex_stalks)), h.sheaf.vertex_stalks)
+    x_star = BlockArray(zeros(sum(h.sheaf.vertex_stalks)), h.sheaf.vertex_stalks)
+
+    regularized_objectives = [(z, y) -> (x -> f(x) + alg.step_size / 2 * (x - z + y)' * (x - z + y)) for f in h.objectives]
+
+    for k in 1:alg.num_iters
+        for (i, f) in enumerate(regularized_objectives)
+            res_x = optimize(f(z[Block(i)], y[Block(i)]), zeros(h.sheaf.vertex_stalks[i]), LBFGS(); autodiff=:forward)
+            x_star[Block(i)] = Optim.minimizer(res_x)
+        end
+        z = nearest_section(h.sheaf, x_star + y, h.b)
+
+        y = y + x_star - z
+    end
+    return z, y
+end
+
+# Stuff for MPC based homological programs
+
+struct MPCParams
+    Q::Matrix
+    R::Matrix
+    ls::DiscreteLinearSystem
+    control_bounds
+    horizon
+    x_target::AbstractArray
+end
+
+MPCParams(Q, R, ls, cbs, N) = MPCParams(Q, R, ls, cbs, N, zeros(size(Q)[1]))
+
+
+struct NonLinearHomologicalProgram <: AbstractHomologicalProgram
+    objectives::Vector{JuMP.Model}
+    sheaf::PotentialSheaf
+end
+
+struct MultiAgentMPCProblem <: AbstractHomologicalProgram
+    objectives::Vector{MPCParams}
+    sheaf::AbstractCellularSheaf
+    x_curr::BlockArray
+    b::AbstractArray
+end
+
+MultiAgentMPCProblem(objectives::Vector{MPCParams}, sheaf::AbstractCellularSheaf, x_curr::BlockArray) =
+    MultiAgentMPCProblem(
+        objectives,
+        sheaf,
+        x_curr,
+        zeros(sum(sheaf.edge_stalks)))
+
+
 
 function solve(h::MultiAgentMPCProblem, alg::ADMM)
     # Storage for optimal final state, control input, and dual variables
