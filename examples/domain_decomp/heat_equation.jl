@@ -1,107 +1,85 @@
 using AlgebraicOptimization
-using Decapodes
-#using Plots
-using CombinatorialSpaces
-using GeometryBasics: Point2
-using Catlab
-using CairoMakie
-Point2D = Point2{Float64}
-
-#=dset = DeltaSet1D()
-
-add_vertices!(dset, 20)
-
-for i in 2:20
-    add_edge!(dset, i - 1, i)
-end=#
-
-function circle(n, c)
-    mesh = EmbeddedDeltaSet1D{Bool,Point2D}()
-    map(range(0, 2pi - (pi / (2^(n - 1))); step=pi / (2^(n - 1)))) do t
-        add_vertex!(mesh, point=Point2D(cos(t), sin(t)) * (c / 2pi))
-    end
-    add_edges!(mesh, 1:(nv(mesh)-1), 2:nv(mesh))
-    add_edge!(mesh, nv(mesh), 1)
-    dualmesh = EmbeddedDeltaDualComplex1D{Bool,Float64,Point2D}(mesh)
-    subdivide_duals!(dualmesh, Circumcenter())
-    mesh, dualmesh
-end
-mesh, dualmesh = circle(9, 500)
+using Graphs
+using SparseArrays
+using LinearAlgebra
+using Krylov
 
 
-function cover_mesh(partition_function, s)
-    vertex_partition = map(partition_function, s[:point])
-    parts = map(unique(vertex_partition)) do p
-        vp = findall(i -> i == p, vertex_partition)
-        sp = non(negate(Subobject(s; V=vp)))
-    end
-    return parts
+
+N = 200
+
+bump(x, mu=0, sigma=10) = begin
+    z = exp.(-(x .- mu) .^ 2 ./ sigma)
+    z /= sum(z)
 end
 
-function pizza_slices(x)
-    x[1] > 0 + 2 * x[2] > 0
-end
-circ_quads = cover_mesh(pizza_slices, dualmesh)
-# draw(circ_quads)
-circ_quads[1]
+#mesh = path_graph(N)
+bump(-3:3, 0, 5)
+#big_L = Graphs.LinAlg.laplacian_matrix(mesh, Float64)
 
-function draw(s; color=:blue)
-    f = Figure()
-    ax = CairoMakie.Axis(f[1, 1])
-    scatter!(ax, s, color=color)
-    return f, ax
+function line_laplacian(n)
+    d = vcat([1.0], 2 * ones(n - 2), [1.0])
+    return Tridiagonal(-ones(n - 1), d, -ones(n - 1))
 end
 
-function draw(submesh::Subobject; color=:orange)
-    ϕ = hom(submesh)
-    f, ax = draw(codom(ϕ))
-    scatter!(ax, dom(ϕ), color=color)
-    f
-end
+L = line_laplacian(N)
 
-function draw(cover::Vector{T}; color=:orange) where T<:Subobject
-    f = Figure()
-    n = length(cover)
-    for i in 1:n
-        for j in i:n
-            ax = CairoMakie.Axis(f[i, j])
-            ui, uj = cover[i], cover[j]
-            ϕ = hom(meet(ui, uj))
-            scatter!(ax, codom(ϕ), color=:blue)
-            scatter!(ax, dom(ϕ), color=color)
-        end
-    end
-    f
-end
+#M = Diagonal(diag(big_L))
+bumpdomain = -6:6
+big_b = zeros(N)
+big_b[12 .+ bumpdomain] = -1.0 * bump(bumpdomain, 0, 1)
+big_b[40 .+ bumpdomain] = 1.0 * bump(bumpdomain, 0, 1)
+big_b[111 .+ bumpdomain] = -1.0 * bump(bumpdomain, 0, 1)
+big_b[170 .+ bumpdomain] = 1.0 * 1.0 * bump(bumpdomain, 0, 1)
 
-draw(circ_quads)
+plot(big_b)
+#big_b = big_b .- (sum(big_b) / length(big_b))
 
 
+# solves Lx=b for x
+x, stats = cr(L, big_b; history=true)
+
+#factors = qr(collect(big_L); pivot=true)
 
 
-#=
-# Define Mesh
-function circle(n, c)
-    mesh = EmbeddedDeltaSet1D{Bool,Point2D}()
-    map(range(0, 2pi - (pi / (2^(n - 1))); step=pi / (2^(n - 1)))) do t
-        add_vertex!(mesh, point=Point2D(cos(t), sin(t)) * (c / 2pi))
-    end
-    add_edges!(mesh, 1:(nv(mesh)-1), 2:nv(mesh))
-    add_edge!(mesh, nv(mesh), 1)
-    dualmesh = EmbeddedDeltaDualComplex1D{Bool,Float64,Point2D}(mesh)
-    subdivide_duals!(dualmesh, Circumcenter())
-    mesh, dualmesh
-end
-mesh, dualmesh = circle(8, 0)
+Nhalf = ceil(Int, N / 2)
+AB = 10
+A = Nhalf + AB
+B = Nhalf + AB
 
-scatter(dualmesh[:point])
+s = CellularSheaf([A, B], [AB])
 
-function laplacian(dualmesh)
-    return -(dec_hodge_star(1, dualmesh) * dec_differential(0, dualmesh) * dec_inv_hodge_star(0, dualmesh) * dec_dual_derivative(0, dualmesh))
-end
+L1 = line_laplacian(A)
+L2 = line_laplacian(B)
 
-L = laplacian(dualmesh)
-=#
+b1 = big_b[1:A]
+b2 = big_b[end-B+1:end]
+
+f1(x) = norm(L1 * x - b1)^2
+f2(x) = norm(L2 * x - b2)^2
+
+p1 = zeros(AB, A)
+p1[1:AB, end-AB+1:end] .= I(AB)
+p1
+
+p2 = zeros(AB, B)
+p2[1:AB, 1:AB] = I(AB)
+p2
+
+set_edge_maps!(s, 1, 2, 1, p1, p2)
+
+hp = HomologicalProgram([f1, f2], s, zeros(AB))
 
 
+primal_sol, dual_sol = solve(hp, ADMM(2.0, 100))
 
+x1 = primal_sol[Block(1)]
+x2 = primal_sol[Block(2)]
+
+
+x_sol = vcat(x1[1:end-AB], x2)
+
+p = plot(x_sol / norm(x_sol), label="hp")
+plot!(p, x / norm(x), color=:teal, label="krylov")
+plot!(p, big_b / norm(big_b), color=:purple, label="b")
+p
