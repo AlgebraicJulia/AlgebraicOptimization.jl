@@ -1,6 +1,7 @@
 module HomologicalPrograms
 
-export MultiAgentMPCProblem, MPCParams, ADMM, solve, do_mpc!, NonConvexADMM, HomologicalProgram, AbstractHomologicalProgram
+export MultiAgentMPCProblem, MPCParams, ADMM, solve, do_mpc!, NonConvexADMM, HomologicalProgram, AbstractHomologicalProgram,
+    CollocationHP
 
 using BlockArrays
 using LinearAlgebra
@@ -30,11 +31,38 @@ abstract type AbstractHomologicalProgram end
 # Stuff for generic homological programs
 
 struct HomologicalProgram <: AbstractHomologicalProgram
-    objectives::Vector{Function}
+    objectives::Vector{Function} # X -> R
     sheaf::AbstractCellularSheaf
     b::AbstractArray
 end
 
+struct CollocationHP <: AbstractHomologicalProgram
+    node_solvers::Vector{Function} # X -> X
+    sheaf::AbstractCellularSheaf
+end
+
+
+function solve(h::CollocationHP, alg::ADMM)
+    y = BlockArray(zeros(sum(h.sheaf.vertex_stalks)), h.sheaf.vertex_stalks)
+    z = BlockArray(zeros(sum(h.sheaf.vertex_stalks)), h.sheaf.vertex_stalks)
+    x_star = BlockArray(zeros(sum(h.sheaf.vertex_stalks)), h.sheaf.vertex_stalks)
+
+    #regularized_objectives = [(z, y) -> (x -> f(x) + alg.step_size / 2 * (x - z + y)' * (x - z + y)) for f in h.objectives]
+
+    for k in 1:alg.num_iters
+        for (i, f) in enumerate(h.node_solvers)
+            res_x = f(z - y)
+            #res_x = optimize(f(z[Block(i)], y[Block(i)]), zeros(h.sheaf.vertex_stalks[i]), LBFGS(); autodiff=:forward)
+            println(length(x_star[Block(i)]))
+            println(length(res_x))
+            x_star[Block(i)] = res_x
+        end
+        z = nearest_section(h.sheaf, x_star + y)
+
+        y = y + x_star - z
+    end
+    return z, y
+end
 
 
 function solve(h::HomologicalProgram, alg::ADMM)
