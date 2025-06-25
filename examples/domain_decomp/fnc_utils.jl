@@ -60,6 +60,7 @@ function bvplin(γ, p, q, r, xspan, lval, rval, n)
     return x, u
 end
 
+# Solver for "local" boundary value problems.
 function bvplin_solver(γ, p, q, r, xspan, n)
     x, Dₓ, Dₓₓ = diffmat2(n - 1, xspan)
 
@@ -72,6 +73,7 @@ function bvplin_solver(γ, p, q, r, xspan, n)
     A = [[1 z]; L[2:n-1, :]; [z 1]]
     println(size(A))
     rvec = r.(x[2:n-1])
+    # returns a solve function that fixes left and rightmost endpoints and solves the middle.
     function solve(lval, rval)
         b = [lval; rvec; rval]
         # Solve the system.
