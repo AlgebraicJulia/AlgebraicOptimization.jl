@@ -8,7 +8,7 @@ using BlockArrays
 
 include("fnc_utils.jl")
 
-N = 200
+N = 101
 
 x, Dₓ, Dₓₓ = diffmat2(N - 1, (-1, 1))
 
@@ -17,7 +17,7 @@ bump(x, mu=0, sigma=10) = begin
 end
 
 
-rhs_func(x) = 3bump(x, 1 / 2, 1 / 20) - 3bump(x, -1 / 2, 1 / 20)
+rhs_func(x) = 2bump(x, 1 / 2, 1 / 20) - 4bump(x, -1 / 2, 1 / 20)
 # x, u = bvplin(1 / 20, x -> 0, x -> 0, x -> -rhs_func(x), [-1, 1], -1 / 2, -1 / 2, N)
 # x, u = bvplin(1 / 20, x -> 0, x -> 0, x -> -rhs_func(x), [-1, 1], 0,0, N)
 
@@ -52,7 +52,7 @@ p1[1:AB, end-AB+1:end] .= I(AB)
 p1
 
 p2 = zeros(AB, B)
-p2[1:AB, 1:AB] = I(AB)
+p2[1:AB, 1:AB] .= I(AB)
 p2
 
 s = CellularSheaf([A, B], [AB])
@@ -63,16 +63,76 @@ hp = CollocationHP([f1, f2], s)
 
 primal_sol, dual_sol = solve(hp, ADMM(2.0, 1))
 
-u1 = primal_sol[Block(1)]
-u2 = primal_sol[Block(2)]
+function lift_matching_family(primal_sol)
+    u1 = primal_sol[Block(1)]
+    u2 = primal_sol[Block(2)]
+    u_solA = vcat(u1[1:end-AB], u2)
+    u_solB = vcat(u1, u2[AB+1:end])
+    return u_solA, u_solB
+end
 
-
-u_solA = vcat(u1[1:end-AB], u2)
-u_solB = vcat(u1, u2[AB+1:end])
+u_solA, u_solB = lift_matching_family(primal_sol)
 @show norm(u_solA - u_solB)
 
 
-p = scatter!(p, x, u_solA, label="hpA")
-p = scatter!(p, x, u_solB, label="hpB")
+# p = scatter!(p, x, u_solA, label="hpA")
+# p = scatter!(p, x, u_solB, label="hpB")
 # plot!(p, u, color=:teal, label="reference")
 # plot!(p, rhs_func.(x), color=:purple, label="b")
+
+u₀ = vcat(u[1:A], u[N-B+1:end])
+primal_sol, dual_sol = solve(hp, ADMM(2.0, 1), u₀)
+u_solA, u_solB = lift_matching_family(primal_sol)
+@show norm(u_solA - u_solB)
+p = scatter!(p, x, u_solB, label="hp-fp")
+
+function alternating_projection(u₀, niter=1)
+    function update(u1,u2)
+        u1, u2 = f1(u1), f2(u2) 
+        mid = (p1*u1 + p2*u2)/2
+        @show length(mid)
+        # y1 = vcat(u1[1:end-AB], u2)
+        # y2 = vcat(u1, u2[AB+1:end])
+        u1[end-AB+1:end] = mid
+        u2[1:AB] = mid
+        # avg_y = (y1+y2)/2
+        @show length(u1)
+        @show length(u2)
+        # @show length(y1)
+        # @show length(y2)
+        # return avg_y[1:A-1], avg_y[N-B+1:end]
+        return u1,u2
+    end
+    # u1 = u₀[Block(1)]
+    # u2 = u₀[Block(2)]
+    u1 = u₀[1:A]
+    u2 = u₀[N-B:end]
+    for i in 1:niter
+        u1,u2 = update(u1,u2)
+    end
+    return vcat(u1, u2[AB+2:end])
+end
+
+u1 = f1(primal_sol[Block(1)])
+u2 = f2(primal_sol[Block(2)])
+
+ualt = alternating_projection(u₀, 2)
+scatter!(p, x, ualt[1:end], label="ualt")
+
+for i in [1,2,5,10,30,100]
+    ualt = alternating_projection(zeros(N), i)
+    plot!(p, x, ualt, label="ualt_$i", marker=:none)
+end
+p
+
+# @show norm(y1-y2)
+
+# scatter!(p, x, y1, label="one_step_noproj A")
+# scatter!(p, x, y2, label="one_step_noproj B")
+# scatter!(p, x, avg_y, label="one_step_noproj mid")
+
+# # plt2 = scatter(y1[Nhalf-AB:Nhalf+AB], label="y1")
+# # plt2 = scatter!(plt2, y2[Nhalf-AB:Nhalf+AB], label="y2")
+
+# x[N-B+1:A]
+# p

@@ -42,17 +42,21 @@ struct CollocationHP <: AbstractHomologicalProgram
 end
 
 
-function solve(h::CollocationHP, alg::ADMM)
-    y = BlockArray(zeros(sum(h.sheaf.vertex_stalks)), h.sheaf.vertex_stalks)
-    z = BlockArray(zeros(sum(h.sheaf.vertex_stalks)), h.sheaf.vertex_stalks)
-    x_star = BlockArray(zeros(sum(h.sheaf.vertex_stalks)), h.sheaf.vertex_stalks)
+function solve(h::CollocationHP, alg::ADMM, x₀=nothing)
+    stalks = h.sheaf.vertex_stalks
+    n = sum(stalks)
+    y = BlockArray(zeros(n), stalks)
+    z = BlockArray(zeros(n), stalks)
+    x_star = !isnothing(x₀) ? 
+        BlockArray(x₀, stalks) :
+        BlockArray(zeros(n), stalks)
 
     #regularized_objectives = [(z, y) -> (x -> f(x) + alg.step_size / 2 * (x - z + y)' * (x - z + y)) for f in h.objectives]
 
     for k in 1:alg.num_iters
         for (i, f) in enumerate(h.node_solvers)
             res_x = f(z - y)
-            #res_x = optimize(f(z[Block(i)], y[Block(i)]), zeros(h.sheaf.vertex_stalks[i]), LBFGS(); autodiff=:forward)
+            #res_x = optimize(f(z[Block(i)], y[Block(i)]), zeros(stalks[i]), LBFGS(); autodiff=:forward)
             println(length(x_star[Block(i)]))
             println(length(res_x))
             x_star[Block(i)] = res_x
