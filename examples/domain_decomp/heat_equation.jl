@@ -12,7 +12,7 @@ using BlockArrays
 
 include("fnc_utils.jl")
 
-N = 100 # Number of nodes in the global problem.
+N = 400 # Number of nodes in the global problem.
 
 # GLOBAL PROBLEM SETUP AND SOLVE
 ################################
@@ -33,23 +33,25 @@ rhs_func(x) = 2bump(x, 1 / 2, 1 / 20) - 4bump(x, -2 / 3, 1 / 30)
 solveN = bvplin_solver(1 / 20, zero, zero, x -> -rhs_func(x), [-1, 1], N)
 x, u = solveN(0, 0)
 
-p = plot(x, rhs_func.(x), label="b")
-p = plot!(p, x, u, label="bvplin_soln")
+p = plot(x, rhs_func.(x), label="b", lw=3, title="Solution n=$N")
+p = plot!(p, x, u, label="bvplin_soln", lw=3, xlabel="x", ylabel="u", legend=:bottomright)
 
 # LOCAL SOLVER SETUP AND SOLVE
 ##############################
 
-
 # Index arithmetic to divide the mesh with AB amount of overlap.
 Nhalf = ceil(Int, N / 2)
-AB = 10
+
+xAright = 0.1
+xBleft = -0.1
+AB = length(findall(xBleft .<= x .<= xAright))
 A = Nhalf + ceil(Int, AB / 2)
 B = Nhalf + ceil(Int, AB / 2)
 
 
 # Create the local solvers for each subdomain.
-solveA = bvplin_solver(1 / 20, zero, zero, x -> -rhs_func(x), [-1, 0.1], A)
-solveB = bvplin_solver(1 / 20, zero, zero, x -> -rhs_func(x), [-0.1, 1], B)
+solveA = bvplin_solver(1 / 20, zero, zero, x -> -rhs_func(x), [-1, xAright], A)
+solveB = bvplin_solver(1 / 20, zero, zero, x -> -rhs_func(x), [xBleft, 1], B)
 
 # "wrap" a solver to just take in a u and return the projection of that u to the nearest solution.
 wrap_solver(solver) = u -> begin
@@ -65,18 +67,56 @@ f1 = wrap_solver(solveA)
 f2 = wrap_solver(solveB)
 
 
+"""
+Make restriction maps. In this case, they are both projections.
+"""
+function restriction_matrices(A, B, AB)
+    p1 = zeros(AB, A)
+    p1[1:AB, end-AB+1:end] .= I(AB)
+
+    p2 = zeros(AB, B)
+    p2[1:AB, 1:AB] .= I(AB)
+    return p1, p2
+end
+
+p1, p2 = restriction_matrices(A, B, AB)
+
+function alternating_projection(u₀, niter=1)
+    function update(u1, u2)
+        u1, u2 = f1(u1), f2(u2)
+        mid = (p1 * u1 + p2 * u2) / 2
+        u1[end-AB+1:end] = mid
+        u2[1:AB] = mid
+        return u1, u2
+    end
+    u1 = u₀[1:A]
+    u2 = u₀[N-B:end]
+    for i in 1:niter
+        u1, u2 = update(u1, u2)
+    end
+    return vcat(u1, u2[AB+1:end])
+end
+
+# Plot both the solutions and the error over iterations
+
+begin
+    rplt = plot(xlabel="x", ylabel="error", title="Error 1:$A, $(N-B):$N")
+    iters = [1, 2, 10, 50, 100, 200]
+    for i in iters
+        ualt = alternating_projection(zeros(N), i)
+        plot!(p, x, ualt, label="ualt_$i", linestyle=:dash, lw=2)
+        plot!(rplt, x, ualt - u, label="resid_$i", lw=2, ls=:dash)
+        println("Residual of ualt_$i: ", norm(ualt - u))
+    end
+    vline!(p, [xBleft, xAright], linestyle=:dash)
+    vline!(rplt, [xBleft, xAright], linestyle=:dash)
+    plt = plot(p, rplt, layout=[1; 1], size=(800, 700))
+end
+plt
+
+
 # CELLULAR SHEAF SETUP
 ######################
-
-
-# make restriction maps. In this case, they are both projections.
-p1 = zeros(AB, A)
-p1[1:AB, end-AB+1:end] .= I(AB)
-p1
-
-p2 = zeros(AB, B)
-p2[1:AB, 1:AB] .= I(AB)
-p2
 
 # Make cellular sheaf.
 s = CellularSheaf([A, B], [AB])
@@ -84,6 +124,8 @@ set_edge_maps!(s, 1, 2, 1, p1, p2)
 
 # Set up homological program using the local solvers we defined earlier.
 hp = CollocationHP([f1, f2], s)
+# CELLULAR SHEAF SETUP
+######################
 
 # Use ADMM to solve the HP.
 #primal_sol, dual_sol = solve(hp, ADMM(2.0, 1))
@@ -111,32 +153,6 @@ u_solA, u_solB = lift_matching_family(primal_sol)
 @show norm(u_solA - u_solB)
 p = scatter!(p, x, u_solB, label="hp-fp")=#
 
-function alternating_projection(u₀, niter=1)
-    function update(u1, u2)
-        u1, u2 = f1(u1), f2(u2)
-        mid = (p1 * u1 + p2 * u2) / 2
-        #@show length(mid)
-        # y1 = vcat(u1[1:end-AB], u2)
-        # y2 = vcat(u1, u2[AB+1:end])
-        u1[end-AB+1:end] = mid
-        u2[1:AB] = mid
-        # avg_y = (y1+y2)/2
-        #@show length(u1)
-        #@show length(u2)
-        # @show length(y1)
-        # @show length(y2)
-        # return avg_y[1:A-1], avg_y[N-B+1:end]
-        return u1, u2
-    end
-    # u1 = u₀[Block(1)]
-    # u2 = u₀[Block(2)]
-    u1 = u₀[1:A]
-    u2 = u₀[N-B:end]
-    for i in 1:niter
-        u1, u2 = update(u1, u2)
-    end
-    return vcat(u1, u2[AB+1:end])
-end
 
 #u1 = f1(primal_sol[Block(1)])
 #u2 = f2(primal_sol[Block(2)])
