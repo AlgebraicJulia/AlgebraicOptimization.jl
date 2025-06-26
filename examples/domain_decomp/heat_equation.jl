@@ -103,16 +103,21 @@ end
 
 begin
     rplt = plot(xlabel="x", ylabel="error", title="Error 1:$A, $(N-B):$N")
-    iters = [10, 50, 100, 200]
+    rplt_tail = plot(xlabel="x", ylabel="error", title="Error 1:$A, $(N-B):$N")
+    iters = [1, 5, 10, 50, 100, 200]
     for i in iters
         ualt = alternating_projection(zeros(N), i)
         plot!(p, x, ualt, label="ualt_$i", linestyle=:dash, lw=2)
-        plot!(rplt, x, ualt - u, label="resid_$i", lw=2, ls=:dash)
+        if i < 200
+            plot!(rplt, x, ualt - u, label="resid_$i", lw=2, ls=:dash)
+        else
+            scatter!(rplt_tail, x[2:end], ((ualt - u) ./ u)[2:end], label="resid_$i", lw=2, ls=:dash)
+        end
         println("Residual of ualt_$i: ", norm(ualt - u))
     end
     vline!(p, [xBleft, xAright], linestyle=:dash)
     vline!(rplt, [xBleft, xAright], linestyle=:dash)
-    plt = plot(p, rplt, layout=[1; 1], size=(800, 700))
+    plt = plot(p, rplt, rplt_tail, layout=[1; 1; 1], size=(800, 700))
 end
 plt
 
@@ -121,8 +126,8 @@ plt
 ######################
 
 # Make cellular sheaf.
-s = CellularSheaf([A, B], [AB])
-set_edge_maps!(s, 1, 2, 1, p1, p2)
+#s = CellularSheaf([A, B], [AB])
+#set_edge_maps!(s, 1, 2, 1, p1, p2)
 
 # Set up homological program using the local solvers we defined earlier.
 # hp = CollocationHP([f1, f2], s)
