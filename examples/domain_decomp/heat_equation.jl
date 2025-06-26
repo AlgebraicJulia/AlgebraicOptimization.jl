@@ -12,13 +12,7 @@ using BlockArrays
 
 include("fnc_utils.jl")
 
-<<<<<<< domain-decomp-debugging
-N = 101
-=======
-
-# How many points in our mesh
-N = 200
->>>>>>> domain-decomp
+N = 101 # Number of nodes in the global problem.
 
 # GLOBAL PROBLEM SETUP AND SOLVE
 ################################
@@ -30,13 +24,8 @@ bump(x, mu=0, sigma=10) = begin
     z = exp.(-(x .- mu) .^ 2 ./ sigma)
 end
 
-<<<<<<< domain-decomp-debugging
 
 rhs_func(x) = 2bump(x, 1 / 2, 1 / 20) - 4bump(x, -1 / 2, 1 / 20)
-=======
-# Construct the global source term.
-rhs_func(x) = 3bump(x, 1 / 2, 1 / 20) - 3bump(x, -1 / 2, 1 / 20)
->>>>>>> domain-decomp
 # x, u = bvplin(1 / 20, x -> 0, x -> 0, x -> -rhs_func(x), [-1, 1], -1 / 2, -1 / 2, N)
 # x, u = bvplin(1 / 20, x -> 0, x -> 0, x -> -rhs_func(x), [-1, 1], 0,0, N)
 
@@ -99,7 +88,6 @@ hp = CollocationHP([f1, f2], s)
 # Use ADMM to solve the HP.
 primal_sol, dual_sol = solve(hp, ADMM(2.0, 1))
 
-<<<<<<< domain-decomp-debugging
 function lift_matching_family(primal_sol)
     u1 = primal_sol[Block(1)]
     u2 = primal_sol[Block(2)]
@@ -107,12 +95,6 @@ function lift_matching_family(primal_sol)
     u_solB = vcat(u1, u2[AB+1:end])
     return u_solA, u_solB
 end
-=======
-# Solution analysis and visualization.
-u1 = primal_sol[Block(1)]
-u2 = primal_sol[Block(2)]
-
->>>>>>> domain-decomp
 
 u_solA, u_solB = lift_matching_family(primal_sol)
 @show norm(u_solA - u_solB)
@@ -130,9 +112,9 @@ u_solA, u_solB = lift_matching_family(primal_sol)
 p = scatter!(p, x, u_solB, label="hp-fp")
 
 function alternating_projection(u₀, niter=1)
-    function update(u1,u2)
-        u1, u2 = f1(u1), f2(u2) 
-        mid = (p1*u1 + p2*u2)/2
+    function update(u1, u2)
+        u1, u2 = f1(u1), f2(u2)
+        mid = (p1 * u1 + p2 * u2) / 2
         @show length(mid)
         # y1 = vcat(u1[1:end-AB], u2)
         # y2 = vcat(u1, u2[AB+1:end])
@@ -144,14 +126,14 @@ function alternating_projection(u₀, niter=1)
         # @show length(y1)
         # @show length(y2)
         # return avg_y[1:A-1], avg_y[N-B+1:end]
-        return u1,u2
+        return u1, u2
     end
     # u1 = u₀[Block(1)]
     # u2 = u₀[Block(2)]
     u1 = u₀[1:A]
     u2 = u₀[N-B:end]
     for i in 1:niter
-        u1,u2 = update(u1,u2)
+        u1, u2 = update(u1, u2)
     end
     return vcat(u1, u2[AB+2:end])
 end
@@ -162,7 +144,7 @@ u2 = f2(primal_sol[Block(2)])
 ualt = alternating_projection(u₀, 2)
 scatter!(p, x, ualt[1:end], label="ualt")
 
-for i in [1,2,5,10,30,100]
+for i in [1, 2, 5, 10, 30, 100]
     ualt = alternating_projection(zeros(N), i)
     plot!(p, x, ualt, label="ualt_$i", marker=:none)
 end
