@@ -50,7 +50,7 @@ B = N-A+AB
 @show length(x), N, A, B, A+B-AB, AB
 
 # Create the local solvers for each subdomain.
-solveA = bvplin_solver(1 / 20, zero, zero, x -> -rhs_func(x), [-1, xAright], A)
+solveA = bvplin_solver(1 / 20, zero, zero, x -> -rhs_func(x), [-1, xAright], A-1)
 solveB = bvplin_solver(1 / 20, zero, zero, x -> -rhs_func(x), [xBleft, 1], B-1)
 # solveAB = bvplin_solver(1 / 20, zero, zero, x -> -rhs_func(x), [xBleft, xAright], AB)
 
@@ -87,11 +87,13 @@ p1, p2 = restriction_matrices(A+1, B, AB)
 
 function alternating_projection(u₀, niter=1)
     function update(u1, u2)
-        u2_res = p2 * u2
-        u1[end-AB+1:end] .= u2_res
+        u1[end] = u2[AB]
+        # u2_res = p2 * u2
+        # u1[end-AB+1:end] .= u2_res
         u1 = f1(u1)
-        u1_res = p1 * u1
-        u2[1:AB] .= u1_res
+        # u1_res = p1 * u1
+        # u2[1:AB] .= u1_res
+        u2[1] = u1[end-AB]
         u2 = f2(u2)
         # mid = (u1_res + u2_res) / 2
         # overlap_u = solveAB(mid[1], mid[end])[2]
@@ -99,14 +101,14 @@ function alternating_projection(u₀, niter=1)
     end
     u1 = u₀[1:A]
     u2 = u₀[N-B+1:end]
-    display([u1[end-AB+1:end] u2[1:AB]])
-    @assert norm(u1[end-AB+1:end] - u2[1:AB]) < 1e-4
+    # display([u1[end-AB+1:end] u2[1:AB]])
+    # @assert norm(u1[end-(AB-1):end] - u2[1:AB]) < 1e-4
     for i in 1:niter
         u1, u2 = update(u1, u2)
     end
     # @show length(u1) length(u2)
     # @show u1[1], u2[1], u1[end], u2[end]
-    return vcat(u1[1:end-(AB+1)], u2)
+    return vcat(u1[1:end-(AB)], u2)
 end
 
 # Plot both the solutions and the error over iterations
