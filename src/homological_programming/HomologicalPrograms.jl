@@ -41,18 +41,31 @@ struct CollocationHP <: AbstractHomologicalProgram
     sheaf::AbstractCellularSheaf
 end
 
+
 # ADMM solver for domain decomposition methods.
-function solve(h::CollocationHP, alg::ADMM)
-    # Initialize storage for algorithm state.
-    y = BlockArray(zeros(sum(h.sheaf.vertex_stalks)), h.sheaf.vertex_stalks) # Dual variable
-    z = BlockArray(zeros(sum(h.sheaf.vertex_stalks)), h.sheaf.vertex_stalks) # Primal variable
-    x_star = BlockArray(zeros(sum(h.sheaf.vertex_stalks)), h.sheaf.vertex_stalks) # Temporary variable
+function solve(h::CollocationHP, alg::ADMM, x₀=nothing)
+    stalks = h.sheaf.vertex_stalks
+    n = sum(stalks)
+    # Dual variable
+    y = BlockArray(zeros(n), stalks)
+    # Primal variable
+    z = BlockArray(zeros(n), stalks)
+    # Temporary variable
+    x_star = !isnothing(x₀) ? 
+        BlockArray(x₀, stalks) :
+        BlockArray(zeros(n), stalks)
+
+    #regularized_objectives = [(z, y) -> (x -> f(x) + alg.step_size / 2 * (x - z + y)' * (x - z + y)) for f in h.objectives]
+
 
     # Run the ADMM iteration.
     for k in 1:alg.num_iters
         # Run local solver for each node of the cellular sheaf
         for (i, f) in enumerate(h.node_solvers)
             res_x = f(z - y)
+            #res_x = optimize(f(z[Block(i)], y[Block(i)]), zeros(stalks[i]), LBFGS(); autodiff=:forward)
+            println(length(x_star[Block(i)]))
+            println(length(res_x))
             x_star[Block(i)] = res_x
         end
         # Project to the nearest global section of the cellular sheaf
