@@ -12,7 +12,7 @@ using BlockArrays
 
 include("fnc_utils.jl")
 
-N = 400 # Number of nodes in the global problem.
+N = 100 # Number of nodes in the global problem.
 
 # GLOBAL PROBLEM SETUP AND SOLVE
 ################################
@@ -35,6 +35,8 @@ x, u = solveN(0, 0)
 
 p = plot(x, rhs_func.(x), label="b", lw=3, title="Solution n=$N")
 p = plot!(p, x, u, label="bvplin_soln", lw=3, xlabel="x", ylabel="u", legend=:bottomright)
+plt2 = deepcopy(p)
+
 
 # LOCAL SOLVER SETUP AND SOLVE
 ##############################
@@ -101,7 +103,7 @@ end
 
 begin
     rplt = plot(xlabel="x", ylabel="error", title="Error 1:$A, $(N-B):$N")
-    iters = [1, 2, 10, 50, 100, 200]
+    iters = [10, 50, 100, 200]
     for i in iters
         ualt = alternating_projection(zeros(N), i)
         plot!(p, x, ualt, label="ualt_$i", linestyle=:dash, lw=2)
@@ -123,20 +125,20 @@ s = CellularSheaf([A, B], [AB])
 set_edge_maps!(s, 1, 2, 1, p1, p2)
 
 # Set up homological program using the local solvers we defined earlier.
-hp = CollocationHP([f1, f2], s)
+# hp = CollocationHP([f1, f2], s)
 # CELLULAR SHEAF SETUP
 ######################
 
 # Use ADMM to solve the HP.
 #primal_sol, dual_sol = solve(hp, ADMM(2.0, 1))
 
-function lift_matching_family(primal_sol)
+#=function lift_matching_family(primal_sol)
     u1 = primal_sol[Block(1)]
     u2 = primal_sol[Block(2)]
     u_solA = vcat(u1[1:end-AB], u2)
     u_solB = vcat(u1, u2[AB+1:end])
     return u_solA, u_solB
-end
+end =#
 
 #u_solA, u_solB = lift_matching_family(primal_sol)
 #@show norm(u_solA - u_solB)
@@ -159,19 +161,20 @@ p = scatter!(p, x, u_solB, label="hp-fp")=#
 
 #ualt = alternating_projection(u₀, 2)
 #scatter!(p, x, ualt[1:end], label="ualt")
+
 err_plt = nothing
-for i in [1, 2, 5, 10, 50]
-    #ualt = alternating_projection(zeros(N), i)
-    ualt = alternating_projection(u, i)
-    scatter!(p, x, ualt, label="ualt_$i", marker=:none)
+for i in [1, 2, 5, 10, 50, 100, 200]
+    ualt = alternating_projection(zeros(N), i)
+    #ualt = alternating_projection(u, i)
+    scatter!(plt2, x, ualt, label="ualt_$i", marker=:none)
     println("Residual of ualt_$i: ", norm(ualt - u))
     if i == 50
         err_plt = plot(x, ualt - u, label="pointwise error", color=:red, linewidth=2)
         #scatter!(err_plt, x, ualt)
     end
 end
-p
-err_plt
+plt2
+# err_plt
 
 # @show norm(y1-y2)
 
