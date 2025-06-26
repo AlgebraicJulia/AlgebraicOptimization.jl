@@ -12,7 +12,7 @@ using BlockArrays
 
 include("fnc_utils.jl")
 
-N = 100 # Number of nodes in the global problem.
+N = 400 # Number of nodes in the global problem.
 
 # GLOBAL PROBLEM SETUP AND SOLVE
 ################################
@@ -33,8 +33,8 @@ rhs_func(x) = 2bump(x, 1 / 2, 1 / 20) - 4bump(x, -1 / 2, 1 / 20)
 solveN = bvplin_solver(1 / 20, zero, zero, x -> -rhs_func(x), [-1, 1], N)
 x, u = solveN(0, 0)
 
-p = plot(x, rhs_func.(x), label="b")
-p = plot!(p, x, u, label="bvplin_soln")
+p = plot(x, rhs_func.(x), label="b",lw=3, title="Solution n=$N")
+p = plot!(p, x, u, label="bvplin_soln", lw=3, xlabel="x", ylabel="u", legend=:bottomright)
 
 # LOCAL SOLVER SETUP AND SOLVE
 ##############################
@@ -52,8 +52,8 @@ B = Nhalf + ceil(Int, AB / 2)
 
 
 # Create the local solvers for each subdomain.
-solveA = bvplin_solver(1 / 20, zero, zero, x -> -rhs_func(x), [-1, 0.1], A)
-solveB = bvplin_solver(1 / 20, zero, zero, x -> -rhs_func(x), [-0.1, 1], B)
+solveA = bvplin_solver(1 / 20, zero, zero, x -> -rhs_func(x), [-1, xAright], A)
+solveB = bvplin_solver(1 / 20, zero, zero, x -> -rhs_func(x), [xBleft,   1], B)
 
 # "wrap" a solver to just take in a u and return the projection of that u to the nearest solution.
 wrap_solver(solver) = u -> begin
@@ -148,21 +148,17 @@ end
 #ualt = alternating_projection(u₀, 2)
 #scatter!(p, x, ualt[1:end], label="ualt")
 
-for i in [1, 2, 5, 10, 50]
+begin
+rplt = plot(xlabel="x", ylabel="error", title="Error 1:$A, $(N-B):$N")
+iters = [1, 2, 10, 50,100]
+for i in iters
     ualt = alternating_projection(zeros(N), i)
-    scatter!(p, x, ualt, label="ualt_$i", marker=:none)
+    plot!(p, x, ualt, label="ualt_$i", linestyle=:dash, lw=2)
+    plot!(rplt, x, ualt - u, label="resid_$i", lw=2, ls=:dash)
     println("Residual of ualt_$i: ", norm(ualt - u))
 end
-p
-
-# @show norm(y1-y2)
-
-# scatter!(p, x, y1, label="one_step_noproj A")
-# scatter!(p, x, y2, label="one_step_noproj B")
-# scatter!(p, x, avg_y, label="one_step_noproj mid")
-
-# # plt2 = scatter(y1[Nhalf-AB:Nhalf+AB], label="y1")
-# # plt2 = scatter!(plt2, y2[Nhalf-AB:Nhalf+AB], label="y2")
-
-# x[N-B+1:A]
-# p
+vline!(p, [xBleft, xAright],linestyle=:dash)
+vline!(rplt, [xBleft, xAright], linestyle=:dash)
+plt = plot(p,rplt, layout=[1;1], size=(800,700))
+end
+plt
