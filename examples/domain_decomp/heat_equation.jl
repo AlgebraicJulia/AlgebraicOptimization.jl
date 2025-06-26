@@ -158,32 +158,3 @@ p = scatter!(p, x, u_solB, label="hp-fp")=#
 
 #u1 = f1(primal_sol[Block(1)])
 #u2 = f2(primal_sol[Block(2)])
-
-#ualt = alternating_projection(u₀, 2)
-#scatter!(p, x, ualt[1:end], label="ualt")
-
-err_plt = nothing
-for i in [1, 2, 5, 10, 50, 100, 200]
-    ualt = alternating_projection(zeros(N), i)
-    #ualt = alternating_projection(u, i)
-    scatter!(plt2, x, ualt, label="ualt_$i", marker=:none)
-    println("Residual of ualt_$i: ", norm(ualt - u))
-    if i == 50
-        err_plt = plot(x, ualt - u, label="pointwise error", color=:red, linewidth=2)
-        #scatter!(err_plt, x, ualt)
-    end
-end
-plt2
-# err_plt
-
-# @show norm(y1-y2)
-
-# scatter!(p, x, y1, label="one_step_noproj A")
-# scatter!(p, x, y2, label="one_step_noproj B")
-# scatter!(p, x, avg_y, label="one_step_noproj mid")
-
-# # plt2 = scatter(y1[Nhalf-AB:Nhalf+AB], label="y1")
-# # plt2 = scatter!(plt2, y2[Nhalf-AB:Nhalf+AB], label="y2")
-
-# x[N-B+1:A]
-# p
