@@ -26,16 +26,13 @@ end
 
 
 rhs_func(x) = 2bump(x, 1 / 2, 1 / 20) - 4bump(x, -2 / 3, 1 / 30)
-# x, u = bvplin(1 / 20, x -> 0, x -> 0, x -> -rhs_func(x), [-1, 1], -1 / 2, -1 / 2, N)
-# x, u = bvplin(1 / 20, x -> 0, x -> 0, x -> -rhs_func(x), [-1, 1], 0,0, N)
 
 # Compute the correct global solution for comparison.
 solveN = bvplin_solver(1 / 20, zero, zero, x -> -rhs_func(x), [-1, 1], N)
-x, u = solveN(0, 0)
+x, u = solveN(1, 1)
 
 p = plot(x, rhs_func.(x), label="b", lw=3, title="Solution n=$N")
 p = plot!(p, x, u, label="bvplin_soln", lw=3, xlabel="x", ylabel="u", legend=:bottomright)
-plt2 = deepcopy(p)
 
 
 # LOCAL SOLVER SETUP AND SOLVE
@@ -54,6 +51,7 @@ B = Nhalf + ceil(Int, AB / 2)
 # Create the local solvers for each subdomain.
 solveA = bvplin_solver(1 / 20, zero, zero, x -> -rhs_func(x), [-1, xAright], A)
 solveB = bvplin_solver(1 / 20, zero, zero, x -> -rhs_func(x), [xBleft, 1], B)
+solveAB = bvplin_solver(1 / 20, zero, zero, x -> -rhs_func(x), [xBleft, xAright], AB)
 
 # "wrap" a solver to just take in a u and return the projection of that u to the nearest solution.
 wrap_solver(solver) = u -> begin
@@ -67,6 +65,7 @@ end
 # Create wrapped local solvers.
 f1 = wrap_solver(solveA)
 f2 = wrap_solver(solveB)
+f12 = wrap_solver(solveAB)
 
 
 """
@@ -87,8 +86,9 @@ function alternating_projection(u₀, niter=1)
     function update(u1, u2)
         u1, u2 = f1(u1), f2(u2)
         mid = (p1 * u1 + p2 * u2) / 2
-        u1[end-AB+1:end] = mid
-        u2[1:AB] = mid
+        overlap_u = solveAB(mid[1], mid[end])[2]
+        u1[end-AB+1:end] = overlap_u
+        u2[1:AB] = overlap_u
         return u1, u2
     end
     u1 = u₀[1:A]
@@ -104,9 +104,9 @@ end
 begin
     rplt = plot(xlabel="x", ylabel="error", title="Error 1:$A, $(N-B):$N")
     rplt_tail = plot(xlabel="x", ylabel="error", title="Error 1:$A, $(N-B):$N")
-    iters = [1, 5, 10, 50, 100, 200]
+    iters = [1, 5, 10, 50, 100, 200, 500]
     for i in iters
-        ualt = alternating_projection(zeros(N), i)
+        ualt = alternating_projection(ones(N), i)
         plot!(p, x, ualt, label="ualt_$i", linestyle=:dash, lw=2)
         if i < 200
             plot!(rplt, x, ualt - u, label="resid_$i", lw=2, ls=:dash)
