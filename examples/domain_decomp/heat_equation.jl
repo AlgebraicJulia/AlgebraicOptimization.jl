@@ -6,36 +6,63 @@ using Krylov
 using Plots
 using BlockArrays
 
+
+# SETUP
+#######
+
 include("fnc_utils.jl")
 
+<<<<<<< domain-decomp-debugging
 N = 101
+=======
 
+# How many points in our mesh
+N = 200
+>>>>>>> domain-decomp
+
+# GLOBAL PROBLEM SETUP AND SOLVE
+################################
+
+# Construct 1st and 2nd differentiation matrices and a vector of nodes for the global problem.
 x, Dₓ, Dₓₓ = diffmat2(N - 1, (-1, 1))
 
 bump(x, mu=0, sigma=10) = begin
     z = exp.(-(x .- mu) .^ 2 ./ sigma)
 end
 
+<<<<<<< domain-decomp-debugging
 
 rhs_func(x) = 2bump(x, 1 / 2, 1 / 20) - 4bump(x, -1 / 2, 1 / 20)
+=======
+# Construct the global source term.
+rhs_func(x) = 3bump(x, 1 / 2, 1 / 20) - 3bump(x, -1 / 2, 1 / 20)
+>>>>>>> domain-decomp
 # x, u = bvplin(1 / 20, x -> 0, x -> 0, x -> -rhs_func(x), [-1, 1], -1 / 2, -1 / 2, N)
 # x, u = bvplin(1 / 20, x -> 0, x -> 0, x -> -rhs_func(x), [-1, 1], 0,0, N)
 
+# Compute the correct global solution for comparison.
 solveN = bvplin_solver(1 / 20, zero, zero, x -> -rhs_func(x), [-1, 1], N)
-x,u = solveN(0,0)
+x, u = solveN(0, 0)
 
 p = plot(x, rhs_func.(x), label="b")
 p = plot!(p, x, u, label="bvplin_soln")
 
+# LOCAL SOLVER SETUP AND SOLVE
+##############################
 
+
+# Index arithmetic to divide the mesh with AB amount of overlap.
 Nhalf = ceil(Int, N / 2)
 AB = 10
 A = Nhalf + ceil(Int, AB / 2)
 B = Nhalf + ceil(Int, AB / 2)
 
+
+# Create the local solvers for each subdomain.
 solveA = bvplin_solver(1 / 20, zero, zero, x -> -rhs_func(x), [-1, 0.1], A)
 solveB = bvplin_solver(1 / 20, zero, zero, x -> -rhs_func(x), [-0.1, 1], B)
 
+# "wrap" a solver to just take in a u and return the projection of that u to the nearest solution.
 wrap_solver(solver) = u -> begin
     l = u[1]
     r = u[end]
@@ -44,9 +71,16 @@ wrap_solver(solver) = u -> begin
     return u
 end
 
+# Create wrapped local solvers.
 f1 = wrap_solver(solveA)
 f2 = wrap_solver(solveB)
 
+
+# CELLULAR SHEAF SETUP
+######################
+
+
+# make restriction maps. In this case, they are both projections.
 p1 = zeros(AB, A)
 p1[1:AB, end-AB+1:end] .= I(AB)
 p1
@@ -55,14 +89,17 @@ p2 = zeros(AB, B)
 p2[1:AB, 1:AB] .= I(AB)
 p2
 
+# Make cellular sheaf.
 s = CellularSheaf([A, B], [AB])
 set_edge_maps!(s, 1, 2, 1, p1, p2)
 
+# Set up homological program using the local solvers we defined earlier.
 hp = CollocationHP([f1, f2], s)
 
-
+# Use ADMM to solve the HP.
 primal_sol, dual_sol = solve(hp, ADMM(2.0, 1))
 
+<<<<<<< domain-decomp-debugging
 function lift_matching_family(primal_sol)
     u1 = primal_sol[Block(1)]
     u2 = primal_sol[Block(2)]
@@ -70,6 +107,12 @@ function lift_matching_family(primal_sol)
     u_solB = vcat(u1, u2[AB+1:end])
     return u_solA, u_solB
 end
+=======
+# Solution analysis and visualization.
+u1 = primal_sol[Block(1)]
+u2 = primal_sol[Block(2)]
+
+>>>>>>> domain-decomp
 
 u_solA, u_solB = lift_matching_family(primal_sol)
 @show norm(u_solA - u_solB)
