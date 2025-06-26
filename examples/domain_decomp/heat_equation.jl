@@ -12,7 +12,7 @@ using BlockArrays
 
 include("fnc_utils.jl")
 
-N = 101 # Number of nodes in the global problem.
+N = 100 # Number of nodes in the global problem.
 
 # GLOBAL PROBLEM SETUP AND SOLVE
 ################################
@@ -86,7 +86,7 @@ set_edge_maps!(s, 1, 2, 1, p1, p2)
 hp = CollocationHP([f1, f2], s)
 
 # Use ADMM to solve the HP.
-primal_sol, dual_sol = solve(hp, ADMM(2.0, 1))
+#primal_sol, dual_sol = solve(hp, ADMM(2.0, 1))
 
 function lift_matching_family(primal_sol)
     u1 = primal_sol[Block(1)]
@@ -96,8 +96,8 @@ function lift_matching_family(primal_sol)
     return u_solA, u_solB
 end
 
-u_solA, u_solB = lift_matching_family(primal_sol)
-@show norm(u_solA - u_solB)
+#u_solA, u_solB = lift_matching_family(primal_sol)
+#@show norm(u_solA - u_solB)
 
 
 # p = scatter!(p, x, u_solA, label="hpA")
@@ -105,24 +105,24 @@ u_solA, u_solB = lift_matching_family(primal_sol)
 # plot!(p, u, color=:teal, label="reference")
 # plot!(p, rhs_func.(x), color=:purple, label="b")
 
-u₀ = vcat(u[1:A], u[N-B+1:end])
+#=u₀ = vcat(u[1:A], u[N-B+1:end])
 primal_sol, dual_sol = solve(hp, ADMM(2.0, 1), u₀)
 u_solA, u_solB = lift_matching_family(primal_sol)
 @show norm(u_solA - u_solB)
-p = scatter!(p, x, u_solB, label="hp-fp")
+p = scatter!(p, x, u_solB, label="hp-fp")=#
 
 function alternating_projection(u₀, niter=1)
     function update(u1, u2)
         u1, u2 = f1(u1), f2(u2)
         mid = (p1 * u1 + p2 * u2) / 2
-        @show length(mid)
+        #@show length(mid)
         # y1 = vcat(u1[1:end-AB], u2)
         # y2 = vcat(u1, u2[AB+1:end])
         u1[end-AB+1:end] = mid
         u2[1:AB] = mid
         # avg_y = (y1+y2)/2
-        @show length(u1)
-        @show length(u2)
+        #@show length(u1)
+        #@show length(u2)
         # @show length(y1)
         # @show length(y2)
         # return avg_y[1:A-1], avg_y[N-B+1:end]
@@ -135,18 +135,19 @@ function alternating_projection(u₀, niter=1)
     for i in 1:niter
         u1, u2 = update(u1, u2)
     end
-    return vcat(u1, u2[AB+2:end])
+    return vcat(u1, u2[AB+1:end])
 end
 
-u1 = f1(primal_sol[Block(1)])
-u2 = f2(primal_sol[Block(2)])
+#u1 = f1(primal_sol[Block(1)])
+#u2 = f2(primal_sol[Block(2)])
 
-ualt = alternating_projection(u₀, 2)
-scatter!(p, x, ualt[1:end], label="ualt")
+#ualt = alternating_projection(u₀, 2)
+#scatter!(p, x, ualt[1:end], label="ualt")
 
-for i in [1, 2, 5, 10, 30, 100]
+for i in [1, 2, 5, 10, 50]
     ualt = alternating_projection(zeros(N), i)
-    plot!(p, x, ualt, label="ualt_$i", marker=:none)
+    scatter!(p, x, ualt, label="ualt_$i", marker=:none)
+    println("Residual of ualt_$i: ", norm(ualt - u))
 end
 p
 
