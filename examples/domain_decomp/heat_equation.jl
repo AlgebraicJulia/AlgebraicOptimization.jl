@@ -25,7 +25,7 @@ bump(x, mu=0, sigma=10) = begin
 end
 
 
-rhs_func(x) = 2bump(x, 1 / 2, 1 / 20) - 4bump(x, -1 / 2, 1 / 20)
+rhs_func(x) = 2bump(x, 1 / 2, 1 / 20) - 4bump(x, -2 / 3, 1 / 30)
 # x, u = bvplin(1 / 20, x -> 0, x -> 0, x -> -rhs_func(x), [-1, 1], -1 / 2, -1 / 2, N)
 # x, u = bvplin(1 / 20, x -> 0, x -> 0, x -> -rhs_func(x), [-1, 1], 0,0, N)
 
@@ -143,13 +143,19 @@ end
 
 #ualt = alternating_projection(u₀, 2)
 #scatter!(p, x, ualt[1:end], label="ualt")
-
+err_plt = nothing
 for i in [1, 2, 5, 10, 50]
-    ualt = alternating_projection(zeros(N), i)
+    #ualt = alternating_projection(zeros(N), i)
+    ualt = alternating_projection(u, i)
     scatter!(p, x, ualt, label="ualt_$i", marker=:none)
     println("Residual of ualt_$i: ", norm(ualt - u))
+    if i == 50
+        err_plt = plot(x, ualt - u, label="pointwise error", color=:red, linewidth=2)
+        #scatter!(err_plt, x, ualt)
+    end
 end
 p
+err_plt
 
 # @show norm(y1-y2)
 
