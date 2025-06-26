@@ -42,7 +42,11 @@ p = plot!(p, x, u, label="bvplin_soln")
 
 # Index arithmetic to divide the mesh with AB amount of overlap.
 Nhalf = ceil(Int, N / 2)
-AB = 10
+
+xAright = 0.1
+xBleft  = -0.1
+AB = length(findall(xBleft .<= x .<= xAright))
+# AB = 10
 A = Nhalf + ceil(Int, AB / 2)
 B = Nhalf + ceil(Int, AB / 2)
 
