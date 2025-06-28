@@ -31,7 +31,7 @@ display(length(xB))
 #check if overlapping is correct
 
 println("overlap matching: ", xA[46:end]==xB[1:11])
-println("\n|     xA      |  x_overlap  |     xB      |")
+println("\n|     xA     |  x_overlap  |     xB     |")
 println("-------------------------------------------------")
 for i in 1:AB
     a_val = @sprintf("%10.6f", xA[end - AB + i])
