@@ -1,0 +1,55 @@
+using AlgebraicOptimization
+using Graphs
+using SparseArrays
+using LinearAlgebra
+using Krylov
+using Plots
+using BlockArrays
+using Printf
+
+#-------------------
+# Other version to build domains (based on number of nodes in full domain 
+# and desired number of nodes in overlap)
+#-------------------
+
+# parameters
+xL, xR = 0.0, 1.5
+N = 101                     # total number of nodes in the domain
+AB = 11                    # nodes in the overlap
+h = (xR - xL) / (N - 1)     # step size
+
+x_full = collect(xL:h:xR)   # full domain nodes
+
+# closest nodes to the center
+i_center = round(Int, ((xL+xR)/2 - xL) / h) + 1   
+
+# index for the overlap
+half = div(AB, 2)
+i_start = i_center - half
+i_end = i_start + AB - 1
+
+# @show i_start, i_end
+# @show i_center
+# @show length(x_full[i_start:i_center])
+# @show length(x_full)
+# @show length(x_full[i_start:i_end])
+
+# build subdomains
+x_overlap = x_full[i_start:i_end]
+xA = x_full[1:i_end]
+xB = x_full[i_start:end]
+
+# check if the overlap is correct
+println("\n|     xA      |  x_overlap  |     xB      |")
+println("-------------------------------------------------")
+for i in 1:AB
+    a_val = @sprintf("%10.6f", xA[end - AB + i])
+    o_val = @sprintf("%10.6f", x_overlap[i])
+    b_val = @sprintf("%10.6f", xB[i])
+    println("| $a_val | $o_val | $b_val |")
+end
+
+println("xA[end-AB+1:end] == x_overlap: ", xA[end-AB+1:end] == x_overlap)
+println("xB[1:AB]         == x_overlap: ", xB[1:AB]         == x_overlap)
+
+@show length(xA), length(xB), length(x_overlap)
