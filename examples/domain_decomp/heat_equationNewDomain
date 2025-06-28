@@ -1,0 +1,139 @@
+using AlgebraicOptimization
+using Graphs
+using SparseArrays
+using LinearAlgebra
+using Krylov
+using Plots
+using BlockArrays
+using Printf
+
+#-------------------
+# Only with odd numbers for overlap, creates domain based on subdomains
+#-------------------
+
+# Parameters
+xL, xR = -1.0, 1.0              
+delta = 0.1                     # half-width of the overlap
+n_overlap = 11                  # nodes in the overlap
+
+# nodes on the overlao
+x_overlap = range(-delta, delta; length=n_overlap)
+h = step(x_overlap)
+AB = n_overlap  
+
+# build subdomain nodes
+xA = collect(xL:h:delta)           
+xB = collect(-delta:h:xR)          
+
+display(length(xA))
+display(length(xB))
+
+#check if overlapping is correct
+
+println("overlap matching: ", xA[46:end]==xB[1:11])
+println("\n|     xA      |  x_overlap  |     xB      |")
+println("-------------------------------------------------")
+for i in 1:AB
+    a_val = @sprintf("%10.6f", xA[end - AB + i])
+    o_val = @sprintf("%10.6f", x_overlap[i])
+    b_val = @sprintf("%10.6f", xB[i])
+    println("| $a_val | $o_val | $b_val |")
+end
+
+println("xA[end-AB+1:end] == x_overlap: ", xA[end-AB+1:end] == x_overlap)
+println("xB[1:AB]         == x_overlap: ", xB[1:AB]         == x_overlap)
+
+N = length(xA) + length(xB) - AB  
+
+# GLOBAL PROBLEM SETUP AND SOLVE
+################################
+
+x_global = vcat(xA[1:end-AB], xB)
+# Construct 1st and 2nd differentiation matrices and a vector of nodes for the global problem.
+#x, Dₓ, Dₓₓ = diffmat2(N - 1, (-1, 1))
+_, Dₓ, Dₓₓ = diffmat2(length(x_global) - 1, (x_global[1], x_global[end]))
+x = x_global
+
+bump(x, mu=0, sigma=10) = begin
+    z = exp.(-(x .- mu) .^ 2 ./ sigma)
+end
+
+rhs_func(x) = 2bump(x, 1 / 2, 1 / 20) - 4bump(x, -2 / 3, 1 / 30)
+
+# Compute the correct global solution for comparison.
+solveN = bvplin_solver(1 / 20, zero, zero, x -> -rhs_func(x), [-1, 1], N-1)
+x, u = solveN(-1, 1)
+@show length(x), length(u)
+p = plot(x, rhs_func.(x), label="b", lw=3, title="Solution n=$N")
+p = plot!(p, x, u, label="bvplin_soln", lw=3, xlabel="x", ylabel="u", legend=:bottomright)
+
+# Create the local solvers for each subdomain
+solveA = bvplin_solver(1 / 20, zero, zero, x -> -rhs_func(x), [xA[1], xA[end]], length(xA) - 1)
+solveB = bvplin_solver(1 / 20, zero, zero, x -> -rhs_func(x), [xB[1], xB[end]], length(xB) - 1)
+
+# Wrap solvers
+wrap_solver(solver) = u -> begin
+    l = u[1]
+    r = u[end]
+    x, u = solver(l, r)
+    return u
+end
+
+f1 = wrap_solver(solveA)
+f2 = wrap_solver(solveB)
+
+# Create restriction matrices
+function restriction_matrices(A, B, AB)
+    p1 = zeros(AB, A)
+    p1[1:AB, end-AB+1:end] .= I(AB)
+
+    p2 = zeros(AB, B)
+    p2[1:AB, 1:AB] .= I(AB)
+    return p1, p2
+end
+
+A = length(xA)
+B = length(xB)
+p1, p2 = restriction_matrices(A, B, AB)
+
+# Alternating projection
+function alternating_projection(u₀, niter=1)
+    function update(u1, u2)
+        u1[end] = u2[AB]
+        u1 = f1(u1)
+        u2[1] = u1[end-AB]
+        u2 = f2(u2)
+        return u1, u2
+    end
+    u1 = u₀[1:A]
+    u2 = u₀[end-B+1:end]
+    for i in 1:niter
+        u1, u2 = update(u1, u2)
+    end
+    return vcat(u1[1:end-AB], u2)
+end
+
+begin
+    rplt = plot(xlabel="x", ylabel="error", title="Error 1:$A, $(N-B):$N")
+    rplt_tail = plot(xlabel="x", ylabel="error", title="Error 1:$A, $(N-B):$N")
+    iters = [1, 5, 10, 50, 100, 200, 500]
+    for i in iters
+        # ualt = alternating_projection(ones(N+1), i)
+        ualt = alternating_projection(u, i)
+        # ualt = alternating_projection(x, i)
+        plot!(p, x, ualt, label="ualt_$i", linestyle=:dash, lw=2)
+        if i < 100
+            plot!(rplt, x, ualt - u, label="resid_$i", lw=2, ls=:dash)
+        else
+            scatter!(rplt_tail, x[2:end], ((ualt - u) ./ u)[2:end], label="resid_$i", lw=2, ls=:dash)
+        end
+        res = norm(ualt - u)
+        relres = norm((ualt - u)./u)
+        # println("Residual of ualt_$i: $res\t $relres")
+    end
+    #vline!(p, [xBleft, xAright], linestyle=:dash)
+    #vline!(rplt, [xBleft, xAright], linestyle=:dash)
+    plt = plot(p, rplt, rplt_tail, layout=[1; 1; 1], size=(800, 700))
+end
+plt
+

@@ -179,3 +179,35 @@ p = scatter!(p, x, u_solB, label="hp-fp")=#
 
 #u1 = f1(primal_sol[Block(1)])
 #u2 = f2(primal_sol[Block(2)])
+
+using Printf
+
+# local solutions
+u1 = f1(u[1:A])                 
+u2 = f2(u[N-B+1:end])           
+
+# corresponding meshes
+xA, _, _ = diffmat2(A - 1, (x[1], xAright))       
+xB, _, _ = diffmat2(B - 1, (xBleft, x[end]))        
+
+# Extract last 20 of A and first 20 of B
+n = ceil(Int, N/10)*2
+println("n = $n")
+xA_20 = xA[end-n+1:end]
+u1_20 = u1[end-n+1:end]
+
+xB_20 = xB[1:n]
+u2_20 = u2[1:n]
+
+# Header
+println("\n|   xA    |   u1(x)   ||   xB    |   u2(x)   |")
+println("--------------------------------------------------")
+
+# Print aligned
+for i in 1:n
+    xa = @sprintf("%7.4f", xA_20[i])
+    ua = @sprintf("%8.5f", u1_20[i])
+    xb = @sprintf("%7.4f", xB_20[i])
+    ub = @sprintf("%8.5f", u2_20[i])
+    println("| $xa | $ua || $xb | $ub |")
+end
