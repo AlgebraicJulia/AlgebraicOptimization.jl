@@ -11,30 +11,37 @@ using Printf
 # Only with odd numbers for overlap, creates domain based on subdomains
 #-------------------
 
+include("fnc_utils.jl")
+
 # Parameters
 xL, xR = -1.0, 1.0              
-delta = 0.1                     # half-width of the overlap
-n_overlap = 11                  # nodes in the overlap
+hw_delta = 0.1                     # half-width of the overlap
+delta = hw_delta                     # half-width of the overlap
+n_overlap = 51                  # nodes in the overlap
 
-# nodes on the overlao
-x_overlap = range(-delta, delta; length=n_overlap)
+# nodes on the overlap
+x_overlap = range((xL+xR)/2-delta, (xL+xR)/2+delta; length=n_overlap)
 h = step(x_overlap)
 AB = n_overlap  
 
 # build subdomain nodes
-xA = collect(xL:h:delta)           
-xB = collect(-delta:h:xR)          
-
+xA = collect(xL:h:(xL+xR)/2+delta)           
+xB = collect((xL+xR)/2-delta:h:xR)     
+#display("xA: ", xA) 
+#display("xB: ", xB)    
+lxA = length(xA)  # length of subdomain A without overlap
+lxB = length(xB)  # length of subdomain B without overlap
+x_overlap
 display(length(xA))
 display(length(xB))
 
 #check if overlapping is correct
 
-println("overlap matching: ", xA[46:end]==xB[1:11])
+println("overlap matching: ", xA[lxA - AB + 1:end]==xB[1:AB])
 println("\n|     xA     |  x_overlap  |     xB     |")
 println("-------------------------------------------------")
 for i in 1:AB
-    a_val = @sprintf("%10.6f", xA[end - AB + i])
+    a_val = @sprintf("%10.6f", xA[lxA - AB + i])
     o_val = @sprintf("%10.6f", x_overlap[i])
     b_val = @sprintf("%10.6f", xB[i])
     println("| $a_val | $o_val | $b_val |")
@@ -43,12 +50,15 @@ end
 println("xA[end-AB+1:end] == x_overlap: ", xA[end-AB+1:end] == x_overlap)
 println("xB[1:AB]         == x_overlap: ", xB[1:AB]         == x_overlap)
 
+
+
 N = length(xA) + length(xB) - AB  
 
 # GLOBAL PROBLEM SETUP AND SOLVE
 ################################
 
 x_global = vcat(xA[1:end-AB], xB)
+
 # Construct 1st and 2nd differentiation matrices and a vector of nodes for the global problem.
 #x, Dₓ, Dₓₓ = diffmat2(N - 1, (-1, 1))
 _, Dₓ, Dₓₓ = diffmat2(length(x_global) - 1, (x_global[1], x_global[end]))
@@ -61,8 +71,8 @@ end
 rhs_func(x) = 2bump(x, 1 / 2, 1 / 20) - 4bump(x, -2 / 3, 1 / 30)
 
 # Compute the correct global solution for comparison.
-solveN = bvplin_solver(1 / 20, zero, zero, x -> -rhs_func(x), [-1, 1], N-1)
-x, u = solveN(-1, 1)
+solveN = bvplin_solver(1 / 20, zero, zero, x -> -rhs_func(x), [xL, xR], N-1)
+x, u = solveN(xL, xR)
 @show length(x), length(u)
 p = plot(x, rhs_func.(x), label="b", lw=3, title="Solution n=$N")
 p = plot!(p, x, u, label="bvplin_soln", lw=3, xlabel="x", ylabel="u", legend=:bottomright)
@@ -136,4 +146,5 @@ begin
     plt = plot(p, rplt, rplt_tail, layout=[1; 1; 1], size=(800, 700))
 end
 plt
+
 
