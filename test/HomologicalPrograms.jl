@@ -8,6 +8,10 @@ using BlockArrays
 using Plots
 using CSV, Tables
 
+# TODO: Get this basic test case 1 working with an arbitrary number of agents.
+
+
+
 # TEST CASE 1: Consensus, with x unconstarined and y constarined.
 
 # Set up each agent's dynamics: x' = Ax + Bu
@@ -68,6 +72,71 @@ scatter!([agent_3_trajectory[1, 1]], [agent_3_trajectory[1, 2]])
 # CSV.write("./examples/ex1/traj1.csv", Tables.table(agent_1_trajectory))
 # CSV.write("./examples/ex1/traj2.csv", Tables.table(agent_2_trajectory))
 # CSV.write("./examples/ex1/traj3.csv", Tables.table(agent_3_trajectory))
+
+
+
+# TEST CASE 1.5: Consensus, with x and y unconstrained.
+# Identical to test case 1, but with N_AGENTS many agents instead of 3.
+
+N_AGENTS = 6  # Set to any number you want
+
+# Set up each agent's dynamics: x' = Ax + Bu
+dt = 0.1  # Discretization step size
+A = [1 dt 0 0; 0 1 0 0; 0 0 1 dt; 0 0 0 1]
+B = [0 0; dt 0; 0 0; 0 dt]
+C = [1 0 0 0; 0 0 1 0]
+system = DiscreteLinearSystem(A, B, C)
+
+# Set up each agent's objective function: x'Qx + u'Ru
+Q = zeros(4, 4)   # All variables are unconstrained
+R = I(2)
+
+# Set up system properties: time horizon and control bounds
+N_horizon = 20
+control_bounds = [-2.0, 2.0]
+params = MPCParams(Q, R, system, control_bounds, N_horizon)
+
+# Set up communication pattern: fully connected sheaf (or ring, or other pattern)
+vertex_stalks = fill(4, N_AGENTS)
+edge_stalks = fill(2, N_AGENTS * (N_AGENTS - 1) ÷ 2)  # For fully connected
+c = CellularSheaf(vertex_stalks, edge_stalks)
+
+# Set edge maps (fully connected)
+edge_idx = 1
+for i in 1:N_AGENTS-1
+    for j in i+1:N_AGENTS
+        set_edge_maps!(c, i, j, edge_idx, C, C)
+        edge_idx += 1
+    end
+end
+
+# Set up solver
+x_init = BlockArray(5 * rand(4 * N_AGENTS), c.vertex_stalks)
+prob = MultiAgentMPCProblem([params for _ in 1:N_AGENTS], c, x_init)
+alg = ADMM(2.0, 10)
+num_iters = 100
+
+# Run solver
+trajectory, controls = do_mpc!(prob, alg, num_iters)
+
+plt = plot()  # <-- Create a new plot object
+
+# Plot results for all agents
+for i in 1:N_AGENTS
+    agent_traj = mapreduce(permutedims, vcat, [C * x[Block(i)] for x in trajectory])
+    plot!(agent_traj[:, 1], agent_traj[:, 2], label="Agent $i")
+    scatter!(agent_traj[:, 1], agent_traj[:, 2])
+    scatter!([agent_traj[1, 1]], [agent_traj[1, 2]])
+end
+display(plt)
+
+
+
+
+
+
+
+
 
 
 # TEST CASE 2: Consensus, with all variables unconstrained. Looks similar to flocking.
