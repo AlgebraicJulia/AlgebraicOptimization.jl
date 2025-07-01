@@ -21,7 +21,7 @@ bump(x, mu=0, sigma=10) = begin
 end
 
 
-uleft  = -1
+uleft = -1
 uright = +1
 rhs_func(x) = 2bump(x, 1 / 2, 1 / 20) - 4bump(x, -1 / 4, 1 / 20)
 
@@ -29,7 +29,7 @@ rhs_func(x) = 2bump(x, 1 / 2, 1 / 20) - 4bump(x, -1 / 4, 1 / 20)
 x, Dₓ, Dₓₓ = diffmat2(N - 1, (-1, 1))
 
 # Compute the correct global solution for comparison.
-solveN = bvplin_solver(1 / 20, zero, zero, x -> -rhs_func(x), [uleft, uright], N-1)
+solveN = bvplin_solver(1 / 20, zero, zero, x -> -rhs_func(x), [uleft, uright], N - 1)
 x, u = solveN(-1, 1)
 p = plot(x, rhs_func.(x), label="b", lw=3, title="Solution n=$N")
 p = plot!(p, x, u, label="bvplin_soln", lw=3, xlabel="x", ylabel="u", legend=:bottomright)
@@ -45,12 +45,12 @@ xAright = 0.1
 xBleft = -0.1
 AB = length(findall(xBleft .<= x .<= xAright))
 A = Nhalf + ceil(Int, AB / 2)
-B = N-A+AB
-@show length(x), N, A, B, A+B-AB, AB
+B = N - A + AB
+@show length(x), N, A, B, A + B - AB, AB
 
 # Create the local solvers for each subdomain.
-solveA = bvplin_solver(1 / 20, zero, zero, x -> -rhs_func(x), [-1, xAright], A-1)
-solveB = bvplin_solver(1 / 20, zero, zero, x -> -rhs_func(x), [xBleft, 1], B-1)
+solveA = bvplin_solver(1 / 20, zero, zero, x -> -rhs_func(x), [-1, xAright], A - 1)
+solveB = bvplin_solver(1 / 20, zero, zero, x -> -rhs_func(x), [xBleft, 1], B - 1)
 
 # "wrap" a solver to just take in a u and return the projection of that u to the nearest solution.
 wrap_solver(solver) = u -> begin
@@ -67,8 +67,8 @@ f2 = wrap_solver(solveB)
 
 
 function alternating_projection(u₀, niter=1)
-    xa, ua = f1(zeros(A+1))
-    xb, ub = f2(zeros(B+1))
+    xa, ua = f1(zeros(A + 1))
+    xb, ub = f2(zeros(B + 1))
     function update(u1, u2)
         u2func = LinearInterpolation(u2, xb)
         u1[end] = u2func(xAright)
@@ -95,12 +95,12 @@ end
 begin
     rplt = plot(xlabel="x", ylabel="error", title="Error 1:$A, $(N-B):$N")
     rplt_tail = plot(xlabel="x", ylabel="error", title="Error 1:$A, $(N-B):$N")
-    iters = [1, 5, 10, 25, 50, 100,200]
+    iters = [1, 5, 10, 25, 50, 100, 200]
     # iters = [50, 100, 200, 500]
     for i in iters
         # (xa, u1),(xb, u2) = alternating_projection(u, i)
-        (xa, u1),(xb, u2) = alternating_projection(collect(LinRange(uleft,uright,N+1)), i)
-        ualt_func(x) = x < xAright ? LinearInterpolation(u1,xa)(x) : LinearInterpolation(u2, xb)(x)
+        (xa, u1), (xb, u2) = alternating_projection(collect(LinRange(uleft, uright, N + 1)), i)
+        ualt_func(x) = x < xAright ? LinearInterpolation(u1, xa)(x) : LinearInterpolation(u2, xb)(x)
 
         ualt = ualt_func.(x)
         plot!(p, xa, u1, label="ualt_$i(a)", linestyle=:dash, lw=2)
@@ -110,8 +110,8 @@ begin
         else
             scatter!(rplt_tail, x, log.(abs.((ualt - u) ./ (u .+ eps(Float64)))), label="resid_$i", lw=2, ls=:dash)
         end
-        res = norm(ualt - u)/sqrt(N)
-        relres = norm((ualt - u)./u)/sqrt(N)
+        res = norm(ualt - u) / sqrt(N)
+        relres = norm((ualt - u) ./ u) / sqrt(N)
         println("MSE of ualt_$i: $res\t Relative MSE $relres")
     end
     vline!(p, [xBleft, xAright], linestyle=:dash)
