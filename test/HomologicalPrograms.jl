@@ -44,7 +44,7 @@ set_edge_maps!(c, 2, 3, 3, C, C)
 # Set up solver
 x_init = BlockArray(5 * rand(12), c.vertex_stalks)
 prob = MultiAgentMPCProblem([params, params, params], c, x_init)
-alg = ADMM(2.0, 10)  
+alg = ADMM(2.0, 10)
 num_iters = 100
 
 
@@ -78,7 +78,7 @@ scatter!([agent_3_trajectory[1, 1]], [agent_3_trajectory[1, 2]])
 # TEST CASE 1.5: Consensus, with x and y unconstrained.
 # Identical to test case 1, but with N_AGENTS many agents instead of 3.
 
-N_AGENTS = 6  # Set to any number you want
+N_AGENTS = 10  # Set to any number you want
 
 # Set up each agent's dynamics: x' = Ax + Bu
 dt = 0.1  # Discretization step size
@@ -88,7 +88,8 @@ C = [1 0 0 0; 0 0 1 0]
 system = DiscreteLinearSystem(A, B, C)
 
 # Set up each agent's objective function: x'Qx + u'Ru
-Q = zeros(4, 4)   # All variables are unconstrained
+Q = I(4)
+Q[1, 1] = 0    # First variable is unconstrained   
 R = I(2)
 
 # Set up system properties: time horizon and control bounds
@@ -102,22 +103,25 @@ edge_stalks = fill(2, N_AGENTS * (N_AGENTS - 1) ÷ 2)  # For fully connected
 c = CellularSheaf(vertex_stalks, edge_stalks)
 
 # Set edge maps (fully connected)
-edge_idx = 1
-for i in 1:N_AGENTS-1
-    for j in i+1:N_AGENTS
-        set_edge_maps!(c, i, j, edge_idx, C, C)
-        edge_idx += 1
+function do_stuff()
+    edge_idx = 1
+    for i in 1:N_AGENTS-1
+        for j in i+1:N_AGENTS
+            set_edge_maps!(c, i, j, edge_idx, C, C)
+            edge_idx += 1
+        end
     end
 end
+do_stuff()
 
 # Set up solver
 x_init = BlockArray(5 * rand(4 * N_AGENTS), c.vertex_stalks)
 prob = MultiAgentMPCProblem([params for _ in 1:N_AGENTS], c, x_init)
-alg = ADMM(2.0, 10)
+alg = ADMM(2.0, 3)
 num_iters = 100
 
 # Run solver
-trajectory, controls = do_mpc!(prob, alg, num_iters)
+@time trajectory, controls = do_mpc!(prob, alg, num_iters)
 
 plt = plot()  # <-- Create a new plot object
 
@@ -138,7 +142,7 @@ display(plt)
 
 
 
-
+#=
 # TEST CASE 2: Consensus, with all variables unconstrained. Looks similar to flocking.
 
 # Set up each agent's dynamics: x' = Ax + Bu
@@ -170,7 +174,7 @@ set_edge_maps!(c, 2, 3, 3, C, C)
 # Set up solver
 x_init = BlockArray(5 * rand(12), c.vertex_stalks)
 prob = MultiAgentMPCProblem([params, params, params], c, x_init)
-alg = ADMM(2.0, 10)  
+alg = ADMM(2.0, 10)
 num_iters = 100
 
 
@@ -231,7 +235,7 @@ set_edge_maps!(c, 2, 3, 3, [2 0 0 0; 0 0 2 0], [1 0 0 0; 0 0 1 0])
 # Set up solver
 x_init = BlockArray(5 * rand(12), c.vertex_stalks)
 prob = MultiAgentMPCProblem([params, params, params], c, x_init)
-alg = ADMM(2.0, 10)  
+alg = ADMM(2.0, 10)
 num_iters = 100
 
 
@@ -291,7 +295,7 @@ set_edge_maps!(c, 2, 3, 3, [2 0 0 0; 0 0 2 0], [1 0 0 0; 0 0 4 0])
 # Set up solver
 x_init = BlockArray(5 * rand(12), c.vertex_stalks)
 prob = MultiAgentMPCProblem([params, params, params], c, x_init)
-alg = ADMM(2.0, 10)  
+alg = ADMM(2.0, 10)
 num_iters = 100
 
 
@@ -354,7 +358,7 @@ set_edge_maps!(c, 1, 3, 2, [cos(θ / 2) 0 -sin(θ / 2) 0; sin(θ / 2) 0 cos(θ /
 # Set up solver
 x_init = BlockArray(5 * rand(12), c.vertex_stalks)
 prob = MultiAgentMPCProblem([params, params, params], c, x_init)
-alg = ADMM(2.0, 10)  
+alg = ADMM(2.0, 10)
 num_iters = 100
 
 
@@ -415,7 +419,7 @@ set_edge_maps!(c, 2, 3, 3, C, C)
 # Set up solver
 x_init = BlockArray(5 * rand(12), c.vertex_stalks)
 prob = MultiAgentMPCProblem([params, params, params], c, x_init)
-alg = ADMM(2.0, 10)  
+alg = ADMM(2.0, 10)
 num_iters = 100
 
 
@@ -478,7 +482,7 @@ set_edge_maps!(c, 1, 3, 2, C, C)
 # Set up solver
 x_init = BlockArray(5 * rand(12), c.vertex_stalks)
 prob = MultiAgentMPCProblem([params, params_free, params_free], c, x_init)
-alg = ADMM(2.0, 10)  
+alg = ADMM(2.0, 10)
 num_iters = 100
 
 
@@ -547,10 +551,11 @@ average_x = (x[Block(1)] + x[Block(2)] + x[Block(3)]) / 3
 # So the 1st and 3rd variables are shared with your neighbor?
 
 # Isn't this C pretty different from the A and B? What's up with that? Since we're using C for the communication pattern,
-                                    # and A and B for the individual agent dynamics.
+# and A and B for the individual agent dynamics.
 
 
-                                    # How did we decide there would be 2 control variables?
+# How did we decide there would be 2 control variables?
 
 
 # alg = ADMM(2.0, 10)   # Should we be using dt here?
+=#

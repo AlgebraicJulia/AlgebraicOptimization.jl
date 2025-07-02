@@ -66,7 +66,8 @@ function solve(h::MultiAgentMPCProblem, alg::ADMM)
     u_star = BlockArray(zeros(sum(u_dims)), u_dims)
 
     for k in 1:alg.num_iters
-        for (i, params) in enumerate(h.objectives)
+        Threads.@threads for i in 1:length(h.objectives)
+            params = h.objectives[i]
             # Contruct the optimization model
             model = nothing
             if iszero(params.x_target)
