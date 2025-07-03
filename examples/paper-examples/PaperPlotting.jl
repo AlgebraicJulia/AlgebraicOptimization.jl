@@ -63,32 +63,26 @@ function add_triangle!(plt, p1, p2, p3, color)
     plot!(plt, [p1[1], p3[1]], [p1[2], p3[2]], lc=color, lw=5, label="")
 end
 
-"""     paper_plot_save_results(trajectory, C, type_str, test_case, additonal_str="", follow_leader=false)
-
-plots the trajectories of each 3 agents and saves the plot and the trajectories as csv files
 """
-function paper_plot_save_results(trajectory, C, type_str, test_case, additonal_str="", follow_leader=false)
+    paper_plot_save_results(trajectory, C, type_str, test_case; additonal_str="", follow_leader=false, n_agents=3)
 
+Plots the trajectories of each agent and saves the plot and the trajectories as csv files.
+"""
+function paper_plot_save_results(trajectory, C, type_str, test_case; additonal_str="", follow_leader=false, n_agents=3)
     # plot
-    agent_1_trajectory = mapreduce(permutedims, vcat, [C * x[BlockArrays.Block(1)] for x in trajectory])
-    agent_2_trajectory = mapreduce(permutedims, vcat, [C * x[BlockArrays.Block(2)] for x in trajectory])
-    agent_3_trajectory = mapreduce(permutedims, vcat, [C * x[BlockArrays.Block(3)] for x in trajectory])
+    agent_trajectories = [mapreduce(permutedims, vcat, [C * x[BlockArrays.Block(i)] for x in trajectory]) for i in 1:n_agents]
 
-    p = plot(agent_1_trajectory[:, 1], agent_1_trajectory[:, 2], labels="", color=:red)
-    if follow_leader
-        scatter!(agent_1_trajectory[2:end, 1], agent_1_trajectory[2:end, 2], label="Agent 1 (Leader)", color=:red)
-    else
-        scatter!(agent_1_trajectory[2:end, 1], agent_1_trajectory[2:end, 2], label="Agent 1", color=:red)
+    colors = [:red, :blue, :green, :orange, :purple, :black, :magenta, :cyan, :brown, :gray]
+    p = plot()
+    for i in 1:n_agents
+        plot!(p, agent_trajectories[i][:, 1], agent_trajectories[i][:, 2], labels="", color=colors[mod1(i, length(colors))])
+        if follow_leader && i == 1
+            scatter!(p, agent_trajectories[i][2:end, 1], agent_trajectories[i][2:end, 2], label="Agent $i (Leader)", color=colors[mod1(i, length(colors))])
+        else
+            scatter!(p, agent_trajectories[i][2:end, 1], agent_trajectories[i][2:end, 2], label="Agent $i", color=colors[mod1(i, length(colors))])
+        end
+        scatter!(p, [agent_trajectories[i][1, 1]], [agent_trajectories[i][1, 2]], label="", color=:cyan)
     end
-    scatter!([agent_1_trajectory[1, 1]], [agent_1_trajectory[1, 2]], label="", color=:cyan)
-
-    plot!(agent_2_trajectory[:, 1], agent_2_trajectory[:, 2], labels="", color=:blue)
-    scatter!(agent_2_trajectory[2:end, 1], agent_2_trajectory[2:end, 2], label="Agent 2", color=:blue)
-    scatter!([agent_2_trajectory[1, 1]], [agent_2_trajectory[1, 2]], label="", color=:cyan)
-
-    plot!(agent_3_trajectory[:, 1], agent_3_trajectory[:, 2], labels="", color=:green)
-    scatter!(agent_3_trajectory[2:end, 1], agent_3_trajectory[2:end, 2], label="Agent 3", color=:green)
-    scatter!([agent_3_trajectory[1, 1]], [agent_3_trajectory[1, 2]], label="Initial Positions", color=:cyan)
 
     title!("$(type_str) ($(additonal_str))")
     xlabel!("x-position")
@@ -112,35 +106,39 @@ function paper_plot_save_results(trajectory, C, type_str, test_case, additonal_s
 
     # save
     savefig(p, "./examples/paper-examples/$(type_str)/$(test_case)/$(type_str)$(test_case)_$(now)")
-    CSV.write("./examples/paper-examples/$(type_str)/$(test_case)/$(type_str)$(test_case)_traj1_$(now).csv", Tables.table(agent_1_trajectory))
-    CSV.write("./examples/paper-examples/$(type_str)/$(test_case)/$(type_str)$(test_case)_traj2_$(now).csv", Tables.table(agent_2_trajectory))
-    CSV.write("./examples/paper-examples/$(type_str)/$(test_case)/$(type_str)$(test_case)_traj3_$(now).csv", Tables.table(agent_3_trajectory))
-
+    for i in 1:n_agents
+        CSV.write("./examples/paper-examples/$(type_str)/$(test_case)/$(type_str)$(test_case)_traj$(i)_$(now).csv", Tables.table(agent_trajectories[i]))
+    end
 end
 
-function plot_trajectories(trajectory, C, triangle=false, moving_triangle=false)
+"""
+    plot_trajectories(trajectory, C; triangle=false, moving_triangle=false, n_agents=3)
+
+Plots the trajectories of all agents. Optionally draws triangles for the first three agents.
+"""
+function plot_trajectories(trajectory, C; triangle=false, moving_triangle=false, n_agents=3)
     # split up trajectories
-    t1 = mapreduce(permutedims, vcat, [C * x[BlockArrays.Block(1)] for x in trajectory])
-    t2 = mapreduce(permutedims, vcat, [C * x[BlockArrays.Block(2)] for x in trajectory])
-    t3 = mapreduce(permutedims, vcat, [C * x[BlockArrays.Block(3)] for x in trajectory])
+    agent_trajs = [mapreduce(permutedims, vcat, [C * x[BlockArrays.Block(i)] for x in trajectory]) for i in 1:n_agents]
 
     plt = PaperPlotting.empty_experiment_plot("")
 
-    # plot triangles
-    if triangle
-        PaperPlotting.add_triangle!(plt, t1[end, :], t2[end, :], t3[end, :], PaperPlotting.purple)
+    # plot triangles (only if at least 3 agents)
+    if triangle && n_agents >= 3
+        PaperPlotting.add_triangle!(plt, agent_trajs[1][end, :], agent_trajs[2][end, :], agent_trajs[3][end, :], PaperPlotting.purple)
     end
 
-    if moving_triangle
-        PaperPlotting.add_triangle!(plt, t1[1, :], t2[1, :], t3[1, :], PaperPlotting.purple)
-        PaperPlotting.add_triangle!(plt, t1[77, :], t2[77, :], t3[77, :], PaperPlotting.purple)
-        PaperPlotting.add_triangle!(plt, t1[end, :], t2[end, :], t3[end, :], PaperPlotting.purple)
+    if moving_triangle && n_agents >= 3
+        PaperPlotting.add_triangle!(plt, agent_trajs[1][1, :], agent_trajs[2][1, :], agent_trajs[3][1, :], PaperPlotting.purple)
+        PaperPlotting.add_triangle!(plt, agent_trajs[1][77, :], agent_trajs[2][77, :], agent_trajs[3][77, :], PaperPlotting.purple)
+        PaperPlotting.add_triangle!(plt, agent_trajs[1][end, :], agent_trajs[2][end, :], agent_trajs[3][end, :], PaperPlotting.purple)
     end
 
     # plot trajectories
-    PaperPlotting.plot_trajectory!(plt, t1, "", :hexagon, PaperPlotting.orange)
-    PaperPlotting.plot_trajectory!(plt, t2, "", :circle, PaperPlotting.blue)
-    PaperPlotting.plot_trajectory!(plt, t3, "", :diamond, PaperPlotting.green)
+    markers = [:hexagon, :circle, :diamond, :star5, :utriangle, :dtriangle, :rect, :pentagon, :xcross, :vline]
+    colors = [PaperPlotting.orange, PaperPlotting.blue, PaperPlotting.green, PaperPlotting.purple, PaperPlotting.beige, :black, :magenta, :cyan, :brown, :gray]
+    for i in 1:n_agents
+        PaperPlotting.plot_trajectory!(plt, agent_trajs[i], "", markers[mod1(i, length(markers))], colors[mod1(i, length(colors))])
+    end
 
     # show plot
     plot(plt)
