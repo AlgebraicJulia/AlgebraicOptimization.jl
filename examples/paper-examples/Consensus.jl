@@ -8,7 +8,7 @@ include("PaperPlotting.jl")
 using .PaperPlotting
 
 # Number of agents
-N_AGENTS = 6
+N_AGENTS = 12
 
 # Set up each agent's dynamics: x' = Ax + Bu
 dt = 0.1  # Discretization step size
@@ -55,6 +55,20 @@ trajectory, controls = do_mpc!(prob, alg, num_iters)
 
 # Plot results (show only first 10 agents for clarity)
 PaperPlotting.paper_plot_save_results(
+    trajectory,
+    [1 0 0 0; 0 0 1 0],
+    "Consensus",
+    2;
+    additonal_str="x unconstrained and y constrained",
+    n_agents=N_AGENTS
+)
+
+
+
+animate_trajectories(trajectory, [1 0 0 0; 0 0 1 0]; n_agents=N_AGENTS)
+
+
+PaperPlotting.animate_trajectories_save_results(
     trajectory,
     [1 0 0 0; 0 0 1 0],
     "Consensus",

@@ -8,7 +8,7 @@ include("PaperPlotting.jl")
 using .PaperPlotting
 
 # Number of agents (change as needed)
-N_AGENTS = 6
+N_AGENTS = 12
 
 # Set up each agent's dynamics: x(t+1) = Ax(t) + Bu(t)
 dt = 0.1  # Discretization step size
@@ -62,9 +62,11 @@ trajectory, controls = do_mpc!(prob, alg, num_iters)
 PaperPlotting.plot_trajectories(trajectory, C; n_agents=N_AGENTS)
 #PaperPlotting.paper_plot_save_results(trajectory, C, "Flocking", 6, "Fixed Distances", n_agents=N_AGENTS)
 
-
-
-
+PaperPlotting.animate_trajectories_save_results(
+    trajectory, C, "Flocking", 6;
+    additonal_str="Fixed Distances",
+    n_agents=N_AGENTS
+)
 
 
 

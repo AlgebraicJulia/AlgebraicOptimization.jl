@@ -1,7 +1,7 @@
 module PaperPlotting
 
 export paper_plot_save_results, postprocess_trajectory, save_trajectories, load_trajectory,
-    empty_experiment_plot, plot_trajectory!, blue, orange, green, beige, purple, add_triangle!, plot_trajectories
+    empty_experiment_plot, plot_trajectory!, blue, orange, green, beige, purple, add_triangle!, plot_trajectories, animate_trajectories, animate_trajectories_save_results
 
 using Test
 using AlgebraicOptimization
@@ -142,6 +142,90 @@ function plot_trajectories(trajectory, C; triangle=false, moving_triangle=false,
 
     # show plot
     plot(plt)
+end
+
+
+function compute_axis_limits(agent_trajs; margin=1.0)
+    xs = vcat([traj[:, 1] for traj in agent_trajs]...)
+    ys = vcat([traj[:, 2] for traj in agent_trajs]...)
+    x_min, x_max = minimum(xs), maximum(xs)
+    y_min, y_max = minimum(ys), maximum(ys)
+    return (x_min - margin, x_max + margin), (y_min - margin, y_max + margin)
+end
+
+function animate_trajectories(trajectory, C; n_agents=3, filename="agents.gif", xlims=nothing, ylims=nothing, fps=20)
+    colors = [:red, :blue, :green, :orange, :purple, :black, :magenta, :cyan, :brown, :gray]
+    agent_trajs = [mapreduce(permutedims, vcat, [C * x[BlockArrays.Block(i)] for x in trajectory]) for i in 1:n_agents]
+    # Compute axis limits if not provided
+    if xlims === nothing || ylims === nothing
+        xlims, ylims = compute_axis_limits(agent_trajs)
+    end
+
+    anim = @animate for t in 1:length(trajectory)
+        plt = plot(
+            title="Agent Consensus Over Time",
+            xlabel="x",
+            ylabel="y",
+            legend=false,
+            xlims=xlims,
+            ylims=ylims,
+        )
+        for i in 1:n_agents
+            pos = agent_trajs[i][t, :]
+            scatter!(
+                plt,
+                [pos[1]], [pos[2]],
+                color=colors[mod1(i, length(colors))],
+                ms=5,
+            )
+        end
+    end
+
+    gif(anim, filename, fps=fps)
+end
+
+function animate_trajectories_save_results(
+    trajectory, C, type_str, test_case;
+    additonal_str="", n_agents=3, xlims=nothing, ylims=nothing, fps=20
+)
+    colors = [:red, :blue, :green, :orange, :purple, :black, :magenta, :cyan, :brown, :gray]
+    agent_trajs = [mapreduce(permutedims, vcat, [C * x[BlockArrays.Block(i)] for x in trajectory]) for i in 1:n_agents]
+    # Compute axis limits if not provided
+    if xlims === nothing || ylims === nothing
+        xlims, ylims = compute_axis_limits(agent_trajs)
+    end
+
+    anim = @animate for t in 1:length(trajectory)
+        plt = plot(
+            title="Agent Consensus Over Time",
+            xlabel="x",
+            ylabel="y",
+            legend=false,
+            xlims=xlims,
+            ylims=ylims,
+        )
+        for i in 1:n_agents
+            pos = agent_trajs[i][t, :]
+            scatter!(
+                plt,
+                [pos[1]], [pos[2]],
+                color=colors[mod1(i, length(colors))],
+                ms=5,
+            )
+        end
+    end
+
+    # Save in the same directory structure as paper_plot_save_results
+    now = Dates.now()
+    now = replace(string(now), ":" => "")
+    now = replace(string(now), "." => "")
+    type_str_lc = lowercase(type_str)
+    dir = "./examples/paper-examples/$(type_str_lc)/$(test_case)"
+    if !isdir(dir)
+        mkpath(dir)
+    end
+    filename = "$(dir)/$(type_str_lc)$(test_case)_$(additonal_str)_$(now).gif"
+    gif(anim, filename, fps=fps)
 end
 
 end
