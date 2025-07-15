@@ -62,17 +62,17 @@ end
 
 # Solver for "local" boundary value problems.
 function bvplin_solver(γ, p, q, r, xspan, n)
-    x, Dₓ, Dₓₓ = diffmat2(n - 1, xspan)
+    x, Dₓ, Dₓₓ = diffmat2(n, xspan)
 
     P = diagm(p.(x))
     Q = diagm(q.(x))
     L = γ * Dₓₓ + P * Dₓ + Q     # ODE expressed at the nodes
 
     # Replace first and last rows using boundary conditions.
-    z = zeros(1, n - 1)
-    A = [[1 z]; L[2:n-1, :]; [z 1]]
+    z = zeros(1, n)
+    A = [[1 z]; L[2:n, :]; [z 1]]
     println(size(A))
-    rvec = r.(x[2:n-1])
+    rvec = r.(x[2:n])
     # returns a solve function that fixes left and rightmost endpoints and solves the middle.
     function solve(lval, rval)
         b = [lval; rvec; rval]
