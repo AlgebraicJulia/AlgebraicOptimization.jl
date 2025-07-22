@@ -8,7 +8,7 @@ include("PaperPlotting.jl")
 using .PaperPlotting
 
 # Number of agents (change as needed)
-N_AGENTS = 12
+N_AGENTS = 6
 
 # Set up each agent's dynamics: x(t+1) = Ax(t) + Bu(t)
 dt = 0.1  # Discretization step size
@@ -21,6 +21,8 @@ system = DiscreteLinearSystem(A, B, C)
 Q_leader = [0 0 0 0; 0 50 0 0; 0 0 0 0; 0 0 0 50] # Objective only concerns velocities
 Q_follower = zeros(4, 4)
 R = I(2)
+# Something new
+R_follower = zeros(2, 2)
 
 N = 10
 control_bounds = [-2.0, 2.0]
@@ -28,7 +30,7 @@ control_bounds = [-2.0, 2.0]
 # Leader tracks a velocity, followers have zero cost (formation enforced by sheaf)
 params = [MPCParams(Q_leader, R, system, control_bounds, N, [0.0, 1.0, 0.0, 0.0])]
 for i in 2:N_AGENTS
-    push!(params, MPCParams(Q_follower, R, system, control_bounds, N))
+    push!(params, MPCParams(Q_follower, R_follower, system, control_bounds, N))
 end
 
 # Potential function for formation (same for all agents)
@@ -40,13 +42,18 @@ edge_stalks = fill(2, N_AGENTS * (N_AGENTS - 1) ÷ 2)
 potentials = [q for _ in 1:N_AGENTS]
 c = PotentialSheaf(vertex_stalks, edge_stalks, potentials)
 
-# Set edge maps (fully connected for formation)
-edge_idx = 1
-for i in 1:N_AGENTS-1
-    for j in i+1:N_AGENTS
-        set_edge_maps!(c, i, j, edge_idx, C, C)
-        edge_idx += 1
-    end
+# # Set edge maps (fully connected for formation)
+# edge_idx = 1
+# for i in 1:N_AGENTS-1
+#     for j in i+1:N_AGENTS
+#         set_edge_maps!(c, i, j, edge_idx, C, C)
+#         edge_idx += 1
+#     end
+# end
+
+# Set edge maps (star graph: leader connects to every other agent)
+for i in 2:N_AGENTS
+    set_edge_maps!(c, 1, i, i - 1, C, C)
 end
 
 # Set up solver
