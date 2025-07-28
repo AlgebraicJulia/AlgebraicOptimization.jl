@@ -1,3 +1,6 @@
+# Trying to implement Multiplicative Schwarz for a partially separable optimization problem
+# with an overlap of size 2
+
 using LinearAlgebra
 using Optim
 using Plots
@@ -15,6 +18,7 @@ R = rand(subproblem_dim, subproblem_dim)
 R = R' * R
 d = rand(subproblem_dim)
 
+# Works better when we have a global matrix that we take sub-parts of as subproblems
 A = rand(global_dim, global_dim)
 A = A' * A
 
@@ -28,6 +32,7 @@ subproblem2(y_start) = y -> g(vcat(y_start, y))
 total_problem(z) = f(z[1:subproblem_dim]) + g(z[subproblem_dim-1:end])
 total_problem2(z) = z' * A * z - a' * z
 
+# Alternating Schwarz method
 function alternate(niters, x0, y0)
     x_res = [x0]
     y_res = [y0]
