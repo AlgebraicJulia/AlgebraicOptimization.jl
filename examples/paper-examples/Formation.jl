@@ -38,8 +38,8 @@ end
 
 # Set up solver
 x_init = BlockArray(5 * rand(4 * N_AGENTS), vertex_stalks)
-init_state = BlockArray(repeat([5, 5, -5, 5], N_AGENTS), vertex_stalks)
-prob = MultiAgentMPCProblem(params, c, x_init, init_state)
+b = BlockArray(repeat([0.0, 0.0], N_AGENTS - 1), edge_stalks)
+prob = MultiAgentMPCProblem(params, c, x_init, b)
 alg = ADMM(2.0, 10)
 num_iters = 100
 
@@ -61,6 +61,52 @@ PaperPlotting.animate_trajectories_save_results(
     "Formation",
     1;
     additonal_str="all variables set to go to 0",
+    n_agents=N_AGENTS
+)
+
+
+
+
+
+
+
+
+
+
+# TEST CASE 2: "Follow the leader" (agent 1 goes to 0, others unconstrained)
+params_leader = MPCParams(Q, R, system, control_bounds, N)
+params_free = MPCParams(zeros(4, 4), R, system, control_bounds, N)
+params2 = [params_leader; [params_free for _ in 2:N_AGENTS]...]
+
+vertex_stalks2 = fill(4, N_AGENTS)
+edge_stalks2 = fill(2, N_AGENTS - 1)
+c2 = CellularSheaf(vertex_stalks2, edge_stalks2)
+for i in 2:N_AGENTS
+    set_edge_maps!(c2, 1, i, i - 1, C, C)
+end
+
+x_init2 = BlockArray(5 * rand(4 * N_AGENTS), vertex_stalks2)
+b2 = BlockArray(repeat([0.0, 0.0], N_AGENTS - 1), edge_stalks2)
+prob2 = MultiAgentMPCProblem(params2, c2, x_init2, b2)
+alg2 = ADMM(2.0, 10)
+num_iters2 = 200
+
+trajectory2, controls2 = do_mpc!(prob2, alg2, num_iters2)
+
+PaperPlotting.paper_plot_save_results(
+    trajectory2,
+    C,
+    "Formation",
+    2;
+    additonal_str="one agent goes to (0, 0)",
+    n_agents=N_AGENTS
+)
+PaperPlotting.animate_trajectories_save_results(
+    trajectory2,
+    C,
+    "Formation",
+    2;
+    additonal_str="one agent goes to (0, 0)",
     n_agents=N_AGENTS
 )
 
