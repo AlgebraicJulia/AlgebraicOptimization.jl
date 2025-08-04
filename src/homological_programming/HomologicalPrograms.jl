@@ -1,6 +1,7 @@
 module HomologicalPrograms
 
-export MultiAgentMPCProblem, MPCParams, ADMM, solve, do_mpc!, NonConvexADMM
+export MultiAgentMPCProblem, MPCParams, ADMM, solve, do_mpc!, NonConvexADMM, HomologicalProgram,
+    AbstractHomologicalProgram
 
 using BlockArrays
 using LinearAlgebra
@@ -9,7 +10,7 @@ using Optim
 using ..CellularSheaves
 using ..MPC
 
-abstract type HomologicalProgam end
+abstract type AbstractHomologicalProgram end
 
 struct MPCParams
     Q::Matrix
@@ -22,13 +23,19 @@ end
 
 MPCParams(Q, R, ls, cbs, N) = MPCParams(Q, R, ls, cbs, N, zeros(size(Q)[1]))
 
+# TODO: make this all generic over the sheaf type and objective types
+struct HomologicalProgram{ObjType,SheafType} <: AbstractHomologicalProgram
+    objectives::Vector{ObjType}
+    sheaf::SheafType
+end
 
-struct NonLinearHomologicalProgram <: HomologicalProgam
+
+struct NonLinearHomologicalProgram <: AbstractHomologicalProgram
     objectives::Vector{JuMP.Model}
     sheaf::PotentialSheaf
 end
 
-struct MultiAgentMPCProblem <: HomologicalProgam
+struct MultiAgentMPCProblem <: AbstractHomologicalProgram
     objectives::Vector{MPCParams}
     sheaf::AbstractCellularSheaf
     x_curr::BlockArray

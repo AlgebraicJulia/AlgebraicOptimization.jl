@@ -1,7 +1,7 @@
 module CellularSheaves
 
 export AbstractCellularSheaf, CellularSheaf, PotentialSheaf, nearest_section, set_edge_maps!, Laplacian, apply_Laplacian, coboundary_map, apply_coboundary_map,
-    potential_objective
+    potential_objective, is_global_section
 
 using BlockArrays
 using SparseArrays
@@ -10,7 +10,7 @@ using Krylov
 using LinearAlgebra
 using Graphs
 using ForwardDiff
-using MLStyle: @match 
+using MLStyle: @match
 
 abstract type AbstractCellularSheaf end
 
@@ -96,6 +96,10 @@ function nearest_section(s::CellularSheaf, x, b)
 
 end
 
+function is_global_section(s::CellularSheaf, v)
+    return iszero(s.coboundary * v)      # This may only work if the graph underlying s is connected
+end
+
 function Laplacian(s::CellularSheaf)
     return s.coboundary' * s.coboundary
 end
@@ -131,4 +135,4 @@ struct ThreadedSheaf <: AbstractCellularSheaf
 
 end
 
-end 
+end
