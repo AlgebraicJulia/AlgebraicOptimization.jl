@@ -60,7 +60,6 @@ function block_coordinate_descent(p::HP, max_iters::Int=10, tol::Float64=1e-6)
             #   min_x f(x) s.t. Ax = b
             # where f is a smooth convex function, A is a matrix, and b is a vector.
 
-
             res = optimize(objective, x[Block(i)], LBFGS(); autodiff=:forward)
             x[Block(i)] = Optim.minimizer(res)
         end
@@ -72,6 +71,33 @@ function block_coordinate_descent(p::HP, max_iters::Int=10, tol::Float64=1e-6)
         end
     end
 
+    return x
+end
+
+function newton_equality_constraint(f, ∇f, ∇²f, A; x0=randn(size(A, 2)), ϵ=1e-6, max_iters=5, step_size)
+    x = x0
+
+    for iter in 1:max_iters
+        g = ∇f(x)
+        H = ∇²f(x)
+
+        KKT = [H A'; A zeros(size(A,1), size(A,1))]   
+        rhs = [-g; zeros(size(A,1))]
+
+        sol = KKT \ rhs
+        Δx = sol[1:length(x)]
+        λ = sol[length(x)+1:end]
+
+        λ2 = Δx' * H * Δx
+        if λ2 / 2 < ϵ
+            println("Convergence in $iter iterations")
+            return x
+        end
+
+        x += step_size * Δx
+    end
+
+    println("No convergence")
     return x
 end
 
