@@ -2,7 +2,7 @@
 # TODO: upstream into Catlab.jl
 module FinSetAlgebras
 
-export FinSetAlgebra, CospanAlgebra, Open, hom_map, laxator, data, portmap
+export FinSetAlgebra, Open, hom_map, laxator, data, portmap
 
 using LinearAlgebra, SparseArrays
 using Catlab
@@ -45,7 +45,7 @@ end
 
 # UWD-algebras (aka Cospan-algebras) from finset-algebras
 #########################################################
-
+#=
 """     CospanAlgebra{T}
 
 A cospan-algebra is a lax symmetric monoidal functor (Cospan(FinSet),+) → (Set,×).
@@ -63,7 +63,7 @@ end
 function oapply(A::CospanAlgebra{T}, ϕ::Cospan, Xs::Vector{T})::T where T
     return hom_map(A, ϕ, laxator(A, Xs))
 end
-
+=#
 # Decorated cospan refactorization
 
 """     Open{T}

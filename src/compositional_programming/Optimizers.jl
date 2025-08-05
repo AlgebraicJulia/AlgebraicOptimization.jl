@@ -1,7 +1,7 @@
 # Implement the cospan-algebra of dynamical systems.
 module Optimizers
 
-export pullback_matrix, pushforward_matrix, Optimizer, OpenContinuousOpt, OpenDiscreteOpt, Euler,
+export pullback_matrix, pushforward_matrix, Optimizer, ContinuousOpt, DiscreteOpt, Euler,
     simulate
 
 using ..FinSetAlgebras
@@ -101,6 +101,10 @@ function simulate(f::Optimizer, x0::Vector{Float64}, tsteps::Int)
         res = f(res)
     end
     return res
+end
+
+function simulate(f::Open{Optimizer}, x0::Vector{Float64}, tsteps::Int)
+    return simulate(data(f), x0, tsteps)
 end
 
 end

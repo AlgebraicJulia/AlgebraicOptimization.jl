@@ -55,6 +55,11 @@ Open{PrimalObjective}(S::FinSet, f::Function, m::FinFunction) =
     Open{PrimalObjective}(S, PrimalObjective(S, f), m)
 
 
+function oapply(d::AbstractUWD, Xs::Vector{Open{PrimalObjective}})
+    return oapply(MinObj(), d, Xs)
+end
+
+
 function gradient_flow(f::PrimalObjective)
     return Optimizer(f.decision_space, x -> -ForwardDiff.gradient(f.objective, x))
 end
@@ -112,19 +117,21 @@ function laxator(::DualComp, Xs::Vector{SaddleObjective})
     return SaddleObjective(apex(c1), apex(c2), objective)
 end
 
-struct OpenDualComp <: CospanAlgebra{Open{SaddleObjective}} end
+#struct OpenDualComp <: CospanAlgebra{Open{SaddleObjective}} end
 
 function oapply(d::AbstractUWD, Xs::Vector{Open{SaddleObjective}})
-    return oapply(OpenDualComp(), DualComp(), d, Xs)
+    return oapply(DualComp(), d, Xs)
 end
 
-function gradient_flow(of::Open{SaddleObjective})
-    f = data(of)
-    x(λ) = optimize(primal_objective(f, λ),
-        zeros(n_primal_vars(f)),
+function gradient_flow(p::SaddleObjective)
+    x(λ) = optimize(primal_objective(p, λ),
+        zeros(n_primal_vars(p)),
         LBFGS(), autodiff=:forward).minimizer
-    return Open{Optimizer}(of.S,
-        λ -> ForwardDiff.gradient(dual_objective(f, x(λ)), λ), of.m)
+    return Optimizer(dom(p), λ -> ForwardDiff.gradient(dual_objective(p, x(λ)), λ))
+end
+
+function gradient_flow(op::Open{SaddleObjective})
+    return Open{Optimizer}(dom(op), gradient_flow(data(op)), portmap(op))
 end
 
 end
