@@ -1,6 +1,6 @@
 module Objectives
 
-export PrimalObjective, MinObj, gradient_flow, 
+export PrimalObjective, MinObj, gradient_flow,
     SaddleObjective, DualComp, primal_solution, dual_objective, primal_objective
 
 using ..FinSetAlgebras
@@ -37,8 +37,8 @@ struct MinObj <: FinSetAlgebra{PrimalObjective} end
 
 The morphism map is defined by ϕ ↦ (f ↦ f∘ϕ^*).
 """
-hom_map(::MinObj, ϕ::FinFunction, p::PrimalObjective) = 
-    PrimalObjective(codom(ϕ), x->p(pullback_matrix(ϕ)*x))
+hom_map(::MinObj, ϕ::FinFunction, p::PrimalObjective) =
+    PrimalObjective(codom(ϕ), x -> p(pullback_matrix(ϕ) * x))
 
 """     laxator(::MinObj, Xs::Vector{PrimalObjective})
 
@@ -46,18 +46,17 @@ Takes the "disjoint union" of a collection of primal objectives.
 """
 function laxator(::MinObj, Xs::Vector{PrimalObjective})
     c = coproduct([dom(X) for X in Xs])
-    subproblems = [x -> X(pullback_matrix(l)*x) for (X,l) in zip(Xs, legs(c))]
+    subproblems = [x -> X(pullback_matrix(l) * x) for (X, l) in zip(Xs, legs(c))]
     objective(x) = sum([sp(x) for sp in subproblems])
     return PrimalObjective(apex(c), objective)
 end
 
-Open{PrimalObjective}(S::FinSet, f::Function, m::FinFunction) = 
+Open{PrimalObjective}(S::FinSet, f::Function, m::FinFunction) =
     Open{PrimalObjective}(S, PrimalObjective(S, f), m)
 
-struct OpenMinObj <: CospanAlgebra{Open{PrimalObjective}} end
 
-function oapply(d::AbstractUWD, Xs::Vector{Open{PrimalObjective}})
-    return oapply(OpenMinObj(), MinObj(), d, Xs)
+function gradient_flow(f::PrimalObjective)
+    return Optimizer(f.decision_space, x -> -ForwardDiff.gradient(f.objective, x))
 end
 
 """     gradient_flow(f::Open{PrimalObjective})
@@ -65,10 +64,10 @@ end
 Returns the gradient flow optimizer of a given primal objective.
 """
 function gradient_flow(f::Open{PrimalObjective})
-    return Open{Optimizer}(f.S, x -> -ForwardDiff.gradient(f.o, x), f.m)
+    return Open{Optimizer}(dom(f), gradient_flow(data(f)), portmap(f))
 end
 
-function solve(f::Open{PrimalObjective}, x0::Vector{Float64}, ss::Float64, n_steps::Int)
+function solve(f::PrimalObjective, x0::Vector{Float64}, ss::Float64, n_steps::Int)
     solver = Euler(gradient_flow(f), ss)
     return simulate(solver, x0, n_steps)
 end
@@ -82,34 +81,34 @@ struct SaddleObjective
     objective::Function # x × λ → R
 end
 
-(p::SaddleObjective)(x,λ) = p.objective(x,λ)
+(p::SaddleObjective)(x, λ) = p.objective(x, λ)
 
 n_primal_vars(p::SaddleObjective) = length(p.primal_space)
 dom(p::SaddleObjective) = p.dual_space
 objective(p::SaddleObjective) = p.objective
-primal_objective(p::SaddleObjective, λ) = 
-    x -> objective(p)(x,λ)
-dual_objective(p::SaddleObjective, x) = 
-    λ -> objective(p)(x,λ) 
+primal_objective(p::SaddleObjective, λ) =
+    x -> objective(p)(x, λ)
+dual_objective(p::SaddleObjective, x) =
+    λ -> objective(p)(x, λ)
 
 primal_solution(p::SaddleObjective, λ) =
-    optimize(primal_objective(p,λ), zeros(n_primal_vars(p)), LBFGS(), autodiff=:forward).minimizer
+    optimize(primal_objective(p, λ), zeros(n_primal_vars(p)), LBFGS(), autodiff=:forward).minimizer
 
 # finset algebra for composing along dual variables of saddle functions
 struct DualComp <: FinSetAlgebra{SaddleObjective} end
 
 # Only "glue" along dual variables
-hom_map(::DualComp, ϕ::FinFunction, p::SaddleObjective) = 
-    SaddleObjective(p.primal_space, codom(ϕ), 
-        (x,λ) -> p(x, pullback_matrix(ϕ)*λ))
+hom_map(::DualComp, ϕ::FinFunction, p::SaddleObjective) =
+    SaddleObjective(p.primal_space, codom(ϕ),
+        (x, λ) -> p(x, pullback_matrix(ϕ) * λ))
 
 # Laxate along both primal and dual variables
 function laxator(::DualComp, Xs::Vector{SaddleObjective})
     c1 = coproduct([X.primal_space for X in Xs])
     c2 = coproduct([X.dual_space for X in Xs])
-    subproblems = [(x,λ) -> 
-        X(pullback_matrix(l1)*x, pullback_matrix(l2)*λ) for (X,l1,l2) in zip(Xs, legs(c1), legs(c2))]
-    objective(x,λ) = sum([sp(x,λ) for sp in subproblems])
+    subproblems = [(x, λ) ->
+        X(pullback_matrix(l1) * x, pullback_matrix(l2) * λ) for (X, l1, l2) in zip(Xs, legs(c1), legs(c2))]
+    objective(x, λ) = sum([sp(x, λ) for sp in subproblems])
     return SaddleObjective(apex(c1), apex(c2), objective)
 end
 
@@ -121,10 +120,10 @@ end
 
 function gradient_flow(of::Open{SaddleObjective})
     f = data(of)
-    x(λ) = optimize(primal_objective(f,λ), 
-                    zeros(n_primal_vars(f)),
-                    LBFGS(), autodiff=:forward).minimizer
-    return Open{Optimizer}(of.S, 
+    x(λ) = optimize(primal_objective(f, λ),
+        zeros(n_primal_vars(f)),
+        LBFGS(), autodiff=:forward).minimizer
+    return Open{Optimizer}(of.S,
         λ -> ForwardDiff.gradient(dual_objective(f, x(λ)), λ), of.m)
 end
 

@@ -64,21 +64,24 @@ function oapply(A::CospanAlgebra{T}, ϕ::Cospan, Xs::Vector{T})::T where T
     return hom_map(A, ϕ, laxator(A, Xs))
 end
 
+# Decorated cospan refactorization
+
 """     Open{T}
 
-Given a type T which implements finset-algebra, Open{T} implements cospan-algebra.
+Given a type T which implements finset-algebra, Open{T} implements decorated cospan-algebra.
 o::T is an object, S is the domain of o, and m : dom(m) → S specifies which parts of
 S are open for composition.
 """
 struct Open{T}
     S::FinSet
     o::T
-    m::FinFunction    
-    Open{T}(S, o, m) where T = 
+    m::FinFunction
+    Open{T}(S, o, m) where T =
         S != codom(m) || dom(o) != S ? error("Invalid portmap.") : new(S, o, m)
 end
 
 # Getters for Open{T}
+dom(obj::Open{T}) where T = obj.S
 data(obj::Open{T}) where T = obj.o
 portmap(obj::Open{T}) where T = obj.m
 
@@ -87,33 +90,43 @@ function Open{T}(o::T) where T
     Open{T}(domain(o), o, id(domain(o)))
 end
 
+# Helper function which infers domain from the portmap.
 function Open{T}(o::T, m::FinFunction) where T
     Open{T}(domain(o), o, m)
 end
 
-dom(obj::Open{T}) where T = dom(obj.m)
+#=
+"""     DecoratedCospanAlgebra{Open{T}}
+
+Given a finset-algebra FinSetAlgebra{T}, DecoratedCospanAlgebra{Open{T}} implements
+CospanAlgebra{Open{T}} by using the finset-algebra as a decorating functor.
+"""
+struct DecoratedCospanAlgebra{Open{T}} <: CospanAlgebra{Open{T}}
+    decorator::FinSetAlgebra{T}
+end=#
+
 
 # Implement the hom_map for a cospan-algebra based on the hom map for a finset-algebra.
-function hom_map(::CospanAlgebra{Open{T}}, A::FinSetAlgebra{T}, ϕ::Cospan, X::Open{T})::Open{T} where T
+function hom_map(F::FinSetAlgebra{T}, ϕ::Cospan, X::Open{T})::Open{T} where T
     l = left(ϕ)
     r = right(ϕ)
     p = pushout(X.m, l)
     pL = legs(p)[1]
     pR = legs(p)[2]
-    return Open{T}(apex(p), hom_map(A, pL, X.o), compose(r,pR))
+    return Open{T}(apex(p), hom_map(F, pL, X.o), compose(r, pR))
 end
 
 # Implement the laxator for a cospan-algebra based on the laxator of a finset-algebra.
-function laxator(::CospanAlgebra{Open{T}}, A::FinSetAlgebra{T}, Xs::Vector{Open{T}})::Open{T} where T
+function laxator(F::FinSetAlgebra{T}, Xs::Vector{Open{T}})::Open{T} where T
     S = coproduct([X.S for X in Xs])
     inclusions(i::Int) = legs(S)[i]
     m = copair([compose(Xs[i].m, inclusions(i)) for i in 1:length(Xs)])
-    o = laxator(A, [X.o for X in Xs])
+    o = laxator(F, [X.o for X in Xs])
     return Open{T}(apex(S), o, m)
 end
 
-function oapply(CA::CospanAlgebra{Open{T}}, FA::FinSetAlgebra{T}, ϕ::Cospan, Xs::Vector{Open{T}})::Open{T} where T
-    return hom_map(CA, FA, ϕ, laxator(CA, FA, Xs))
+function oapply(F::FinSetAlgebra{T}, ϕ::Cospan, Xs::Vector{Open{T}})::Open{T} where T
+    return hom_map(F, ϕ, laxator(F, Xs))
 end
 
 """     uwd_to_cospan(d::AbstractUWD)
@@ -134,12 +147,12 @@ function uwd_to_cospan(d::AbstractUWD)
 
     left = copair(ports_to_junctions)
     right = FinFunction(subpart(d, :outer_junction), left_codom)
-    
-    return Cospan(left, right)  
+
+    return Cospan(left, right)
 end
 
-function oapply(CA::CospanAlgebra{Open{T}}, FA::FinSetAlgebra{T}, d::AbstractUWD, Xs::Vector{Open{T}})::Open{T} where T
-    return oapply(CA, FA, uwd_to_cospan(d), Xs)
+function oapply(F::FinSetAlgebra{T}, d::AbstractUWD, Xs::Vector{Open{T}})::Open{T} where T
+    return oapply(F, uwd_to_cospan(d), Xs)
 end
 
 end
