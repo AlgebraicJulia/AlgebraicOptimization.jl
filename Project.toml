@@ -5,6 +5,7 @@ authors = ["Tyler Hanks <teh.hanks@gmail.com>"]
 version = "0.0.1"
 
 [deps]
+ArgCheck = "dce04be8-c92d-5529-be00-80e4d2c0e197"
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 BlockArrays = "8e7c35d0-a365-5155-bbbb-fb81a777f24e"
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
@@ -34,6 +35,7 @@ Tables = "bd369af6-aec1-5ad0-b16a-f7cc5008161c"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [compat]
+ArgCheck = "2.5.0"
 BlockArrays = "1"
 Catlab = "0.16.10"
 ForwardDiff = "0.10.36, 1"
@@ -42,8 +44,8 @@ Ipopt = "1.7.2"
 JuMP = "1.24.0"
 Krylov = "0.9.9, 0.10"
 LinearOperators = "2.9.0"
-MatrixMarket = "0.5"
 MLStyle = "0.4.17"
+MatrixMarket = "0.5"
 Metis = "1.5.0"
 NLsolve = "4.5.1"
 Optim = "1.9.4"
