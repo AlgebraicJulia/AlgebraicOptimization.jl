@@ -2,6 +2,7 @@ module HomologicalProgramming
 
 using Reexport
 
+include("BlockSparseArrays.jl")
 include("MPC.jl")
 include("CellularSheaves.jl")
 #include("SheafNodes.jl")
