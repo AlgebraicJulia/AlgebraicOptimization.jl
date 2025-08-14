@@ -197,7 +197,7 @@ function animate_trajectories_save_results(
 
     anim = @animate for t in 1:length(trajectory)
         plt = plot(
-            title="Agent Consensus Over Time",
+            title=additonal_str,
             xlabel="x",
             ylabel="y",
             legend=false,

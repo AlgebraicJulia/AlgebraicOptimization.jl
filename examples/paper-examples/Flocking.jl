@@ -121,18 +121,26 @@ edge_stalks = fill(2, (N_AGENTS - 1) + (N_AGENTS - 2))
 potentials = [q for _ in 1:length(edge_stalks)]
 c = PotentialSheaf(vertex_stalks, edge_stalks, potentials)
 
-# Set edge maps (wheel graph: leader connects to every other agent, followers form a path)
-edge_idx = 1
-# Hub edges
-for i in 2:N_AGENTS
-    set_edge_maps!(c, 1, i, edge_idx, C, C)
-    edge_idx += 1
+
+function edge_indexing()
+    # Set edge maps (wheel graph: leader connects to every other agent, followers form a path)
+    edge_idx = 1
+    # Hub edges
+    for i in 2:N_AGENTS
+        set_edge_maps!(c, 1, i, edge_idx, C, C)
+        edge_idx += 1
+    end
+    # Path edges among followers (no wrap-around)
+    for i in 2:(N_AGENTS - 1)
+        set_edge_maps!(c, i, i + 1, edge_idx, C, C)
+        edge_idx += 1
+    end
 end
-# Path edges among followers (no wrap-around)
-for i in 2:(N_AGENTS - 1)
-    set_edge_maps!(c, i, i + 1, edge_idx, C, C)
-    edge_idx += 1
-end
+edge_indexing()
+
+
+
+
 
 # Set up solver
 x_init = BlockArray(rand(4 * N_AGENTS), vertex_stalks)
@@ -196,24 +204,30 @@ edge_stalks = fill(2, num_hub_edges + num_path_edges + num_spoke_edges)
 potentials = vcat([q for _ in 1:num_hub_edges], [q for _ in 1:num_path_edges], [r for _ in 1:num_spoke_edges])
 c = PotentialSheaf(vertex_stalks, edge_stalks, potentials)
 
-# Set edge maps (wheel graph: leader connects to every other agent, followers form a path)
-edge_idx = 1
-# Hub edges
-for i in 2:N_AGENTS
-    set_edge_maps!(c, 1, i, edge_idx, C, C)
-    edge_idx += 1
-end
-# Path edges among followers (no wrap-around)
-for i in 2:(N_AGENTS - 1)
-    set_edge_maps!(c, i, i + 1, edge_idx, C, C)
-    edge_idx += 1
-end
 
-# Connections between every other spoke (followers)
-for i in 2:1:(N_AGENTS - 2)
-    set_edge_maps!(c, i, i + 2, edge_idx, C, C)
-    edge_idx += 1
+
+function edge_indexing_2()
+    # Set edge maps (wheel graph: leader connects to every other agent, followers form a path)
+    edge_idx = 1
+    # Hub edges
+    for i in 2:N_AGENTS
+        set_edge_maps!(c, 1, i, edge_idx, C, C)
+        edge_idx += 1
+    end
+    # Path edges among followers (no wrap-around)
+    for i in 2:(N_AGENTS - 1)
+        set_edge_maps!(c, i, i + 1, edge_idx, C, C)
+        edge_idx += 1
+    end
+    # Connections between every other spoke (followers)
+    for i in 2:1:(N_AGENTS - 2)
+        set_edge_maps!(c, i, i + 2, edge_idx, C, C)
+        edge_idx += 1
+    end
 end
+edge_indexing_2()
+
+
 
 # Set up solver
 x_init = BlockArray(rand(4 * N_AGENTS), vertex_stalks)

@@ -27,3 +27,9 @@ Manifest.toml
 .DS_Store
 .vscode
 .ipynb_checkpoints
+
+# Test outputs
+# Ignore CSV, PNG, and GIF files
+*.csv
+*.png
+*.gif

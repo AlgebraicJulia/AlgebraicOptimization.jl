@@ -4,7 +4,10 @@ using LinearAlgebra
 using BlockArrays
 using Plots
 using CSV, Tables
+include("PaperPlotting.jl")
 using .PaperPlotting
+
+# TEST CASE 1: All agents go to 0
 
 # Number of agents (change as needed)
 N_AGENTS = 5
@@ -159,5 +162,79 @@ PaperPlotting.animate_trajectories_save_results(
     2;
     additonal_str="one agent goes to (0, 0)",
     follow_leader=true,
+    n_agents=N_AGENTS
+)
+
+
+
+
+# TEST CASE 3: All agents go to a circle around 0
+
+# Number of agents (change as needed)
+N_AGENTS = 5
+
+# Set up each agent's dynamics: x' = Ax + Bu
+dt = 0.1  # Discretization step size
+A = [1 dt 0 0; 0 1 0 0; 0 0 1 dt; 0 0 0 1]
+B = [0 0; dt 0; 0 0; 0 dt]
+C = [1 0 0 0; 0 0 1 0]
+system = DiscreteLinearSystem(A, B, C)
+
+# Set up each agent's objective function: x'Qx + u'Ru
+Q = zeros(4, 4)
+Q[1, 1] = 1    # x goes to 0
+Q[3, 3] = 1    # y goes to 0
+R = I(2)
+
+N = 20
+control_bounds = [-2.0, 2.0]
+
+# TEST CASE 1: All agents go to 0
+params = [MPCParams(Q, R, system, control_bounds, N) for _ in 1:N_AGENTS]
+
+# Sheaf: star graph (agent 1 is the hub)
+vertex_stalks = fill(4, N_AGENTS)
+num_edges = N_AGENTS * (N_AGENTS - 1) ÷ 2
+edge_stalks = fill(2, num_edges)
+
+q(x) = 1000 * 1/(x' * x)
+potentials = [q for _ in 1:num_edges]
+c = PotentialSheaf(vertex_stalks, edge_stalks, potentials)
+
+
+# Set edge maps (fully connected)
+edge_idx = 1
+for i in 1:N_AGENTS-1
+    for j in i+1:N_AGENTS
+        set_edge_maps!(c, i, j, edge_idx, C, C)
+        edge_idx += 1
+    end
+end
+
+# Set up solver
+x_init = BlockArray(5 * rand(4 * N_AGENTS), vertex_stalks)
+prob = MultiAgentMPCProblem(params, c, x_init)
+alg = NonConvexADMM(1000.0, 10, 0.0001, 5000)
+
+num_iters = 300
+
+# Run solver
+trajectory, controls = do_mpc!(prob, alg, num_iters)
+
+# Plot results
+PaperPlotting.paper_plot_save_results(
+    trajectory,
+    C,
+    "Formation",
+    1;
+    additonal_str="all variables set to go to 0",
+    n_agents=N_AGENTS
+)
+PaperPlotting.animate_trajectories_save_results(
+    trajectory,
+    C,
+    "Formation",
+    1;
+    additonal_str="All agents go to 0 with collision avoidance",
     n_agents=N_AGENTS
 )
