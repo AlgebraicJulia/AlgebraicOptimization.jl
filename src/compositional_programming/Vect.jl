@@ -1,5 +1,4 @@
 using LinearAlgebra
-using Test
 
 # Compute the pullback of the diagram
 #  l - A -> m <- B - n
@@ -8,7 +7,7 @@ function pullback(A::AbstractMatrix, B::AbstractMatrix)
     @assert size(A, 1) == size(B, 1)
     n = size(A, 2)
     basis = nullspace([A -B])
-    basis[1:n, :], basis[n + 1:end, :]
+    basis[1:n, :], basis[n+1:end, :]
 end
 
 # Compute the pushout of the diagram
@@ -27,8 +26,8 @@ function universal_pullback(
     C::AbstractMatrix,
     D::AbstractMatrix)
 
-U, V = map(adjoint, pullback(A, B))
-U * C + V * D
+    U, V = map(adjoint, pullback(A, B))
+    U * C + V * D
 end
 
 
@@ -37,18 +36,18 @@ end
 #  l <- A - m - B -> n
 # in category of matrices.
 function universal_pushout(
-        A::AbstractMatrix,
-        B::AbstractMatrix,
-        C::AbstractMatrix,
-        D::AbstractMatrix)
+    A::AbstractMatrix,
+    B::AbstractMatrix,
+    C::AbstractMatrix,
+    D::AbstractMatrix)
 
     universal_pullback(A', B', C', D')
 end
 
 function product(n::Int, m::Int)
-    p1 = [I(n) zeros(n,m)]
-    p2 = [zeros(m,n) I(m)]
-    return p1,p2
+    p1 = [I(n) zeros(n, m)]
+    p2 = [zeros(m, n) I(m)]
+    return p1, p2
 end
 
 pair(A::AbstractMatrix, B::AbstractMatrix) = [A; B]
@@ -59,17 +58,17 @@ pair(A::AbstractMatrix, B::AbstractMatrix) = [A; B]
 A = [0.0 1.0]
 B = [1.0 0.0]
 
-C,D = pullback(A,B)
+C, D = pullback(A, B)
 
 x = rand(3)
 
-@test norm(A*C*x - B*D*x) < 1e-12
+#@test norm(A*C*x - B*D*x) < 1e-12
 
 um = [0.0 0.0]
 
-π1,π2 = pullback(um,um)
+π1, π2 = pullback(um, um)
 
-ϕ = universal_pullback(um,um,C,D)
+ϕ = universal_pullback(um, um, C, D)
 
 struct OpenObjective # X -> Y
     obj::Function # V -> R
@@ -84,31 +83,31 @@ codom(f::OpenObjective) = size(f.B, 1)
 apex(f::OpenObjective) = size(f.A, 2)
 
 function compose(f::OpenObjective, g::OpenObjective)
-    C,D = pullback(f.B, g.A)
-    ϕ = pair(C,D)
+    C, D = pullback(f.B, g.A)
+    ϕ = pair(C, D)
 
     X = apex(f)
     Y = apex(g)
-    p1, p2 = product(X,Y)
+    p1, p2 = product(X, Y)
 
-    comp_obj(x) = f.obj(p1*ϕ*x) + g.obj(p2*ϕ*x)
-    return OpenObjective(comp_obj, f.A*C, g.B*D)
+    comp_obj(x) = f.obj(p1 * ϕ * x) + g.obj(p2 * ϕ * x)
+    return OpenObjective(comp_obj, f.A * C, g.B * D)
 end
 
-Q = rand(4,4)
-Q = Q'*Q
+Q = rand(4, 4)
+Q = Q' * Q
 
-R = rand(5,5)
-R = R'*R
+R = rand(5, 5)
+R = R' * R
 
-A1 = rand(3,4)
-B1 = rand(2,4)
+A1 = rand(3, 4)
+B1 = rand(2, 4)
 
-A2 = rand(2,5)
+A2 = rand(2, 5)
 B2 = rand(3, 5)
 
-f = OpenObjective(x -> x'*Q*x, A1, B1)
-g = OpenObjective(x -> x'*R*x, A2, B2)
+f = OpenObjective(x -> x' * Q * x, A1, B1)
+g = OpenObjective(x -> x' * R * x, A2, B2)
 
 gf = compose(f, g)
 

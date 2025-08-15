@@ -4,8 +4,6 @@ export DiscreteLinearSystem, optimize_step, lqr_model, lq_tracking_model
 
 using JuMP
 using Ipopt
-using Plots
-using PlotThemes
 using LinearAlgebra
 
 struct DiscreteLinearSystem
@@ -116,68 +114,6 @@ function optimize_step(x_k, Q, R, s::DiscreteLinearSystem, x_target, ρ::Real)
     # Return the optimized control input for the next time step
     return value.(x[:, horizon]), value.(u[:, 1])
 end
-
-"""     do_mpc(x_0, u_0)
-
-Runs Model Predictive Control (MPC) over multiple time steps and visualizes the state trajectory.
-
-# Arguments
-- `x_0::Vector{Float64}`: Initial state vector (2D system).
-- `u_0::Vector{Float64}`: Initial control input vector (2D system).
-
-"""
-function do_mpc(x_0, u_0, s::DiscreteLinearSystem)
-    x = [x_0]  # Store state trajectory as a list of vectors
-    u_to_plot = [u_0]
-    u = u_0  # Initial control input
-    Q = 2 * Matrix(I, 2, 2)  # State weights
-    R = 2 * Matrix(I, 2, 2)   # Control input weights
-    # Q = randn(2,2)  # State weights
-    # Q = Q * Q'  # Ensure Q is positive semi-definite
-    # R = randn(2,2)  # Control input weights
-    # R = R * R'  # Ensure R is positive semi-definite
-    x_target = [7.0; 13.0]  # Desired terminal state
-
-    N = 200
-    # MPC loop for 99 iterations
-    for i in 1:N-1
-        u = optimize_step(x[end], Q, R, s, x_target)  # Compute optimal control input
-        push!(u_to_plot, u)  # Store control input for plotting
-        new_x = s(x[end], u)  # Update state using system dynamics
-        push!(x, new_x)  # Store new state
-    end
-
-    # Plot results of state vs. time
-    x_matrix = hcat(x...)
-    theme(:juno)
-    p = plot(1:N, x_matrix', label=["x1" "x2"], title="MPC State Evolution",
-        xlabel="Iteration", ylabel="State value")
-    savefig(p, "./examples/single_agent_mpc.png")
-
-    # Plot results of control input vs. time
-    u_matrix = hcat(u_to_plot...)
-    plot!(1:N, u_matrix', label=["u1" "u2"], title="MPC Control Input Evolution",
-        xlabel="Iteration", ylabel="Control input value")
-    savefig(p, "./examples/single_agent_mpc_control.png")
-
-    p = plot(x_matrix[1, :], x_matrix[2, :], label="State trajectory", title="MPC State Trajectory",
-        xlabel="x1", ylabel="x2", legend=:bottomright)
-    scatter!(x_matrix[1, :], x_matrix[2, :], label="States", marker=:circle, markersize=4)  # Overlay points
-
-    savefig(p, "./examples/single_agent_mpc_trajectory.png")
-end
-
-# Example initial conditions for state and control input
-#x = vec(rand(1, 2) * 10.0)
-#u = vec(rand(1,2) * 10.0)
-#u = [0.0; 0.0]
-
-#=s = DiscreteLinearSystem(
-    [1.0 0.05; 0.0 1.0], 0.05 * I(2)
-)
-=#
-# Run the MPC simulation and plot results
-#do_mpc(x, u, s)
 
 
 end # module
