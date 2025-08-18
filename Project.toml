@@ -37,6 +37,7 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 [compat]
 ArgCheck = "2.5.0"
 BlockArrays = "1"
+CSV = "0.10"
 Catlab = "0.16.10"
 ForwardDiff = "0.10.36, 1"
 Graphs = "1.12.0"
