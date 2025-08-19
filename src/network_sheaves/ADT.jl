@@ -193,7 +193,7 @@ It performs crucial semantic tasks such as:
 - Decorating equation fields with values stored in variable declarations.
 - Inferring edge stalk dimensions from restriction maps and vertex stalk dimensions.
 - Ensuring edge stalk dimensions are consistent with restriction maps and vertex stalk dimensions.
-- Generating code for outputting a CellularSheaf object. 
+- Generating code for outputting a EuclideanSheaf object. 
 """
 function construct(expr::CellularSheafExpr)
     # Dictionaries for storing constructor parameters
@@ -219,11 +219,11 @@ function construct(expr::CellularSheafExpr)
     end
 
     # Construct Cellular Sheaf
-    c = CellularSheaf(vertex_dims, edge_dims)
+    s = EuclideanSheaf(vertex_dims)
 
     # Construct edge maps
     for eq in expr.equations
-        set_edge_maps!(c, vertex_to_index[eq.lhs.vertex_stalk.name], vertex_to_index[eq.rhs.vertex_stalk.name], edge_to_index[eq], eq.lhs.restriction_map.matrix, eq.rhs.restriction_map.matrix)
+        add_sheaf_edge!(s, vertex_to_index[eq.lhs.vertex_stalk.name], vertex_to_index[eq.rhs.vertex_stalk.name], eq.lhs.restriction_map.matrix, eq.rhs.restriction_map.matrix)
     end
 
     return c

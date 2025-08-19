@@ -6,6 +6,7 @@ version = "0.0.1"
 
 [deps]
 ArgCheck = "dce04be8-c92d-5529-be00-80e4d2c0e197"
+AutoHashEquals = "15f4f7f2-30c1-5605-9d31-71845cf9641f"
 BlockArrays = "8e7c35d0-a365-5155-bbbb-fb81a777f24e"
 Catlab = "134e5e36-593f-5add-ad60-77f754baafbe"
 Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
@@ -27,6 +28,7 @@ StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
 [compat]
 ArgCheck = "2.5.0"
+AutoHashEquals = "2.2.0"
 BlockArrays = "1"
 Catlab = "0.16.10"
 ForwardDiff = "0.10.36, 1"
