@@ -1,4 +1,4 @@
-module OpenFlowGraphs
+module FlowGraphs
 
 export FlowGraph, underlying_graph, FG, OpenFG, to_problem,
     node_incidence_matrix, dual_decomposition, nvertices, nedges, random_open_flowgraph
@@ -59,10 +59,8 @@ function laxator(::FG, gs::Vector{FlowGraph})
         laxed_src, laxed_tgt, laxed_costs, laxed_flows)
 end
 
-struct OpenFG <: CospanAlgebra{Open{FlowGraph}} end
-
 function oapply(d::AbstractUWD, gs::Vector{Open{FlowGraph}})
-    return oapply(OpenFG(), FG(), d, gs)
+    return oapply(FG(), d, gs)
 end
 
 # Flow graphs to min cost net flow objective functions
@@ -82,16 +80,16 @@ function node_incidence_matrix(g::FlowGraph)
     return A
 end
 
-function to_problem(og::Open{FlowGraph})
-    g = data(og)
-    S = og.S
-    m = og.m
+function to_problem(g::FlowGraph)
     A = node_incidence_matrix(g)
     function obj(x, λ)
         return sum([g.edge_costs[i](x[i]) for i in 1:nedges(g)]) + λ' * (A * x - g.flows)
     end
+    return SaddleObjective(FinSet(nedges(g)), dom(g), obj)
+end
 
-    return Open{SaddleObjective}(S, SaddleObjective(FinSet(nedges(g)), S, obj), m)
+function to_problem(og::Open{FlowGraph})
+    return Open{SaddleObjective}(dom(og), to_problem(data(og)), portmap(og))
 end
 
 function dual_decomposition(og::Open{FlowGraph}, γ)
