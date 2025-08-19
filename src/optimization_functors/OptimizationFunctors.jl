@@ -1,4 +1,4 @@
-module CompositionalProgramming
+module OptimizationFunctors
 
 using Reexport
 

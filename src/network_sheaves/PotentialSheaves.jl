@@ -6,6 +6,7 @@ import ..SheafInterface: vertex_stalks, edge_stalks, coboundary_map, add_vertex_
     get_vertex_stalk, get_edge_stalk, get_restriction_map, sheaf_laplacian
 using ForwardDiff
 using BlockArrays
+using AutoHashEquals
 
 @auto_hash_equals struct PotentialSheaf{S<:AbstractNetworkSheaf} <: AbstractNetworkSheaf
     sheaf::S

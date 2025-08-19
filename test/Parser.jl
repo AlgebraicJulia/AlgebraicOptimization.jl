@@ -17,7 +17,7 @@ macro_result = @cellular_sheaf A, B, C begin
 
 end
 
-func_result = EuclideanSheaf([4, 4, 4])
+func_result = EuclideanSheaf{Int64}([4, 4, 4])
 add_sheaf_edge!(func_result, 1, 2, A, B)
 add_sheaf_edge!(func_result, 1, 3, A, C)
 add_sheaf_edge!(func_result, 2, 3, B, C)
@@ -37,7 +37,7 @@ macro_result = @cellular_sheaf A, B begin
 
 end
 
-func_result = EuclideanSheaf([4, 4, 4])
+func_result = EuclideanSheaf{Int64}([4, 4, 4])
 add_sheaf_edge!(func_result, 1, 2, A, B)
 add_sheaf_edge!(func_result, 1, 3, A, B)
 
@@ -56,7 +56,7 @@ macro_result = @cellular_sheaf C begin
 
 end
 
-func_result = EuclideanSheaf([4, 4, 4])
+func_result = EuclideanSheaf{Int64}([4, 4, 4])
 add_sheaf_edge!(func_result, 1, 2, C, C)
 add_sheaf_edge!(func_result, 1, 3, C, C)
 add_sheaf_edge!(func_result, 2, 3, C, C)

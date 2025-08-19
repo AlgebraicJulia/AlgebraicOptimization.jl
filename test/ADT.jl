@@ -2,7 +2,7 @@ module TestADT
 
 using Test
 using AlgebraicOptimization
-using AlgebraicOptimization.HomologicalProgramming.CellularSheafTerm:
+using AlgebraicOptimization.NetworkSheaves.CellularSheafTerm:
     Declaration, RestrictionMap, VertexStalk, TypeName, Product, Equation, UntypedDeclaration, TypedDeclaration, CellularSheafExpr, construct
 
 # Let's prove that the current AST properly represents a cellular sheaf

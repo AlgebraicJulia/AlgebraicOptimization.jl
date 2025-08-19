@@ -136,16 +136,18 @@ function parse_cellular_sheaf(local_vals::Any, local_names::Expr, block::Expr)
     end
 
     # Append passed in local arguments to declaration array
+    T = nothing
     for (name, val) in zip(Tuple(local_names.args), local_vals)
         if !(val isa Matrix)
             throw(SheafTypeError("Restriction map \"$val\" is not a matrix."))
         end
+        T = eltype(val)
         push!(decs, UntypedDeclaration(name, val))
     end
 
     # Build root of AST
     root = CellularSheafExpr(decs, eqns)
-    return construct(root)
+    return construct(root, T=T) # Construct the cellular sheaf
 end
 
 function parse_declaration(declaration::Expr)

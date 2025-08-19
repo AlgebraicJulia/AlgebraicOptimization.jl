@@ -2,10 +2,10 @@ module AlgebraicOptimization
 
 using Reexport
 
-include("compositional_programming/CompositionalProgramming.jl")
-include("homological_programming/HomologicalProgramming.jl")
+include("network_sheaves/NetworkSheaves.jl")
+include("optimization_functors/OptimizationFunctors.jl")
 
-@reexport using .CompositionalProgramming
-@reexport using .HomologicalProgramming
+@reexport using .NetworkSheaves
+@reexport using .OptimizationFunctors
 
 end

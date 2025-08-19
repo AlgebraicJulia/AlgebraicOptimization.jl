@@ -35,6 +35,7 @@ export CellularSheafExpr, Declaration, UntypedDeclaration, TypedDeclaration, Res
     SheafError, SheafSyntaxError, SheafDeclarationError, SheafTypeError, SheafArgumentError, SheafDimensionMismatchError
 
 using MLStyle: @data, @match
+
 using ..EuclideanSheaves
 
 ### Tree Nodes ###
@@ -52,7 +53,7 @@ This is the child node of Product and represents the restriction map "A" in a pr
 """
 mutable struct RestrictionMap <: AbstractSheafTerm
     name::Symbol
-    matrix::Matrix{Any}
+    matrix::Matrix
 end
 
 """ Vertex Stalk
@@ -195,7 +196,7 @@ It performs crucial semantic tasks such as:
 - Ensuring edge stalk dimensions are consistent with restriction maps and vertex stalk dimensions.
 - Generating code for outputting a EuclideanSheaf object. 
 """
-function construct(expr::CellularSheafExpr)
+function construct(expr::CellularSheafExpr; T=Float64)
     # Dictionaries for storing constructor parameters
     vertex_dims = Int[]
     vertex_to_index = Dict{Symbol,Int}()
@@ -219,14 +220,14 @@ function construct(expr::CellularSheafExpr)
     end
 
     # Construct Cellular Sheaf
-    s = EuclideanSheaf(vertex_dims)
+    s = EuclideanSheaf{T}(vertex_dims)
 
     # Construct edge maps
     for eq in expr.equations
-        add_sheaf_edge!(s, vertex_to_index[eq.lhs.vertex_stalk.name], vertex_to_index[eq.rhs.vertex_stalk.name], eq.lhs.restriction_map.matrix, eq.rhs.restriction_map.matrix)
+        EuclideanSheaves.add_sheaf_edge!(s, vertex_to_index[eq.lhs.vertex_stalk.name], vertex_to_index[eq.rhs.vertex_stalk.name], eq.lhs.restriction_map.matrix, eq.rhs.restriction_map.matrix)
     end
 
-    return c
+    return s
 end
 
 function generate_look_up_table(context::Vector{Declaration})

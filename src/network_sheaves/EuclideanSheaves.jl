@@ -31,20 +31,20 @@ function Base.:(isequal)(up1::UnorderedPair{T}, up2::UnorderedPair{T}) where T
            (up1.first == up2.second && up1.second == up2.first)
 end
 
-"""     EuclideanSheaf 
+"""     EuclideanSheaf{T}
 
 A Euclidean sheaf is a network sheaf where each vertex stalk is a Euclidean space R^n for some n,
 each edge stalk is a Euclidean space R^m for some m, and each restriction map is a linear map
-R^n -> R^m represented by a matrix.
+R^n -> R^m represented by a matrix of type T.
 """
-@auto_hash_equals struct EuclideanSheaf <: AbstractNetworkSheaf
+@auto_hash_equals struct EuclideanSheaf{T} <: AbstractNetworkSheaf
     vertex_stalks::Vector{Int}
     edge_stalks::Dict{UnorderedPair{Int},Int}
     underlying_graph::Graph
-    restriction_maps::Dict{Pair{Int},Matrix{Float64}}
+    restriction_maps::Dict{Pair{Int},Matrix{T}}
 end
 
-EuclideanSheaf(vertex_stalks::Vector{Int}) = EuclideanSheaf(vertex_stalks, Dict{UnorderedPair{Int},Int}(), Graph(length(vertex_stalks)), Dict{Pair{Int},Matrix{Float64}}())
+EuclideanSheaf{T}(vertex_stalks::Vector{Int}) where T = EuclideanSheaf{T}(vertex_stalks, Dict{UnorderedPair{Int},Int}(), Graph(length(vertex_stalks)), Dict{Pair{Int},Matrix{T}}())
 
 function vertex_stalks(s::EuclideanSheaf)
     return s.vertex_stalks
@@ -88,7 +88,7 @@ end
 Add an edge between vertices v1 and v2 with restriction maps rm1 and rm2.
 rm1 is the restriction map from vertex v1 to the edge, and rm2 is the restriction map from vertex v2 to the edge.
 """
-function add_sheaf_edge!(s::EuclideanSheaf, v1::Int, v2::Int, rm1::Matrix{Float64}, rm2::Matrix{Float64})
+function add_sheaf_edge!(s::EuclideanSheaf{T}, v1::Int, v2::Int, rm1::Matrix{T}, rm2::Matrix{T}) where T
     @assert v1 <= length(s.vertex_stalks) && v2 <= length(s.vertex_stalks)
     @assert size(rm1)[1] == size(rm2)[1]
     @assert size(rm1)[2] == s.vertex_stalks[v1]
@@ -100,12 +100,13 @@ function add_sheaf_edge!(s::EuclideanSheaf, v1::Int, v2::Int, rm1::Matrix{Float6
     s.edge_stalks[edge_key] = stalk_size
     s.restriction_maps[v1=>v2] = rm1
     s.restriction_maps[v2=>v1] = rm2
+    return ne(s.underlying_graph)
 end
 
-function coboundary_map(s::EuclideanSheaf)
+function coboundary_map(s::EuclideanSheaf{T}) where T
     I = Int64[]
     J = Int64[]
-    V = Matrix{Float64}[]
+    V = Matrix{T}[]
 
     for (e_idx, e) in enumerate(edges(s.underlying_graph))
         i = src(e)
