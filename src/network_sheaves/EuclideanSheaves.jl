@@ -1,7 +1,7 @@
 # Module for network sheaves valued in Euclidean spaces with linear restriction maps
 module EuclideanSheaves
 
-export EuclideanSheaf, UnorderedPair
+export EuclideanSheaf, UnorderedPair, sheaf_laplacian_matrix
 
 using Graphs
 using AutoHashEquals: @auto_hash_equals
