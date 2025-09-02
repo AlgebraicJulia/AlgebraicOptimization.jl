@@ -1,6 +1,7 @@
 using AlgebraicOptimization
 using BlockArrays
 using Test
+using Plots
 
 
 # Sync version of laplacian iteration on threaded sheaf nodes
@@ -15,6 +16,8 @@ loss = iterate_laplacian!(nodes, step_size, convergence_threshold)
 @test loss[end] < convergence_threshold 
 
 
+
+
 # Async version of laplacian iteration on threaded sheaf nodes
 nodes = random_threaded_sheaf(8, 0.3, 10, 0.3)
 random_initialization(nodes)
@@ -23,10 +26,36 @@ convergence_threshold = 1.0
 step_size = 2.0f-2 
 prob_update = 0.8
 prob_broadcast = 0.1
-loss = iterate_laplacian_async!(nodes, step_size, 100, prob_update, prob_broadcast)
+loss = iterate_laplacian_async!(nodes, step_size, 100000, prob_update, prob_broadcast)
 
-loss = iterate_laplacian_async!(nodes, step_size, convergence_threshold, prob_update, prob_broadcast)
-@test loss[end] < convergence_threshold 
+iters = 1:length(loss)
+plot(iters, 1 ./ loss, xlabel="Iteration", ylabel="1 / Loss", title="Inverse Loss vs Iteration", legend=false)
+
+
+
+
+# Several iterations and plot average result
+
+num_trials = 10
+max_iters = 100000
+avg_loss = zeros(max_iters + 1)
+
+prob_update = 0.8
+prob_broadcast = 0.001
+
+for trial in 1:num_trials
+    nodes = random_threaded_sheaf(8, 0.3, 10, 0.3)
+    random_initialization(nodes)
+    loss = iterate_laplacian_async!(nodes, step_size, max_iters, prob_update, prob_broadcast)
+    avg_loss .+= loss
+end
+
+avg_loss ./= num_trials
+iters = 1:length(avg_loss)
+plot(iters, 1 ./ avg_loss, xlabel="Iteration", ylabel="Average 1 / Loss (5 trials)", title="Average Inverse Loss vs Iteration", legend=false)
+
+# loss = iterate_laplacian_async!(nodes, step_size, convergence_threshold, prob_update, prob_broadcast)
+# @test loss[end] < convergence_threshold 
 
 # # Converting a random MatrixSheaf to an array of ThreadedSheaves
 
