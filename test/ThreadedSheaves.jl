@@ -18,15 +18,15 @@ loss = iterate_laplacian!(nodes, step_size, convergence_threshold)
 
 
 
-# Async version of laplacian iteration on threaded sheaf nodes
-nodes = random_threaded_sheaf(8, 0.3, 10, 0.3)
+# Async version of laplacian iteration on threaded sheaf nodes. phase <= period <= B.
+nodes = random_async_threaded_sheaf(8, 0.3, 10, 0.3, 1000)
 random_initialization(nodes)
 
 convergence_threshold = 1.0
 step_size = 2.0f-2 
 prob_update = 0.8
 prob_broadcast = 0.1
-loss = iterate_laplacian_async!(nodes, step_size, 100000, prob_update, prob_broadcast)
+loss = iterate_laplacian!(nodes, step_size, 100000)
 
 iters = 1:length(loss)
 plot(iters, 1 ./ loss, xlabel="Iteration", ylabel="1 / Loss", title="Inverse Loss vs Iteration", legend=false)
@@ -40,13 +40,11 @@ num_trials = 10
 max_iters = 100000
 avg_loss = zeros(max_iters + 1)
 
-prob_update = 0.8
-prob_broadcast = 0.001
 
 for trial in 1:num_trials
-    nodes = random_threaded_sheaf(8, 0.3, 10, 0.3)
+    nodes = random_async_threaded_sheaf(8, 0.3, 10, 0.3, 100)
     random_initialization(nodes)
-    loss = iterate_laplacian_async!(nodes, step_size, max_iters, prob_update, prob_broadcast)
+    loss = iterate_laplacian!(nodes, step_size, max_iters)
     avg_loss .+= loss
 end
 
@@ -57,27 +55,28 @@ plot(iters, loss, yscale=:log10, xlabel="Iteration", ylabel="Loss", title="Loss 
 
 
 
-# Infrequent updates, frequent broadcasts
-num_trials = 10
-max_iters = 100000
-avg_loss = zeros(max_iters + 1)
+# # Infrequent updates, frequent broadcasts
+# num_trials = 10
+# max_iters = 100000
+# avg_loss = zeros(max_iters + 1)
 
 
-prob_update = 0.001
-prob_broadcast = 0.8
+# prob_update = 0.001
+# prob_broadcast = 0.8
 
-for trial in 1:num_trials
-    nodes = random_threaded_sheaf(8, 0.3, 10, 0.3)
-    random_initialization(nodes)
-    loss = iterate_laplacian_async!(nodes, step_size, max_iters, prob_update, prob_broadcast)
-    avg_loss .+= loss
-end
+# for trial in 1:num_trials
+#     nodes = random_threaded_sheaf(8, 0.3, 10, 0.3)
+#     random_initialization(nodes)
+#     loss = iterate_laplacian_async!(nodes, step_size, max_iters, prob_update, prob_broadcast)
+#     avg_loss .+= loss
+# end
 
-avg_loss ./= num_trials
-iters = 1:length(avg_loss)
-plot(iters, 1 ./ avg_loss, xlabel="Iteration", ylabel="Average 1 / Loss ($num_trials trials)", title="Average Inverse Loss vs Iteration", legend=false)
+# avg_loss ./= num_trials
+# iters = 1:length(avg_loss)
+# plot(iters, 1 ./ avg_loss, xlabel="Iteration", ylabel="Average 1 / Loss ($num_trials trials)", title="Average Inverse Loss vs Iteration", legend=false)
 
-plot(iters, loss, yscale=:log10, xlabel="Iteration", ylabel="Loss", title="Loss vs Iteration", legend=false)
+# plot(iters, loss, yscale=:log10, xlabel="Iteration", ylabel="Loss", title="Loss vs Iteration", legend=false)
+
 # loss = iterate_laplacian_async!(nodes, step_size, convergence_threshold, prob_update, prob_broadcast)
 # @test loss[end] < convergence_threshold 
 

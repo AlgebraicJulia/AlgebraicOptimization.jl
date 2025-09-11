@@ -1,6 +1,6 @@
 module SheafNodes
 
-export DistributedSheafNode, ThreadedSheafNode, add_neighbor!, neighbors
+export AbstractSheafNode, DistributedSheafNode, ThreadedSheafNode, AsyncSheafNode, add_neighbor!, neighbors
 
 using Distributed
 using SparseArrays
@@ -15,6 +15,19 @@ mutable struct ThreadedSheafNode <: AbstractSheafNode
     in_channels::Dict{Int32,Channel}
     out_channels::Dict{Int32,Channel}
     x::Vector{Float32}
+end
+
+mutable struct AsyncSheafNode <: AbstractSheafNode
+    id::Int32
+    dimension::Int32
+    neighbors::Dict{Int32,AbstractMatrix}
+    in_channels::Dict{Int32,Channel}
+    out_channels::Dict{Int32,Channel}
+    x::Vector{Float32}
+    period::Int32
+    phase::Int32
+    iteration::Int32
+    # itersSinceUpdate::Int32
 end
 
 mutable struct DistributedSheafNode <: AbstractSheafNode

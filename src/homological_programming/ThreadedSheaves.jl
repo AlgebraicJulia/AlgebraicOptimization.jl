@@ -1,6 +1,6 @@
 module ThreadedSheaves
 
-export random_threaded_sheaf, random_initialization, initialize!, compute_clusters, threaded_sheaf, laplacian_step!, iterate_laplacian!, iterate_laplacian_async!, distance_from_consensus
+export random_threaded_sheaf, random_async_threaded_sheaf, random_initialization, initialize!, compute_clusters, threaded_sheaf, laplacian_step!, iterate_laplacian!, iterate_laplacian_async!, distance_from_consensus
 
 import ..DistributedSheaves: iterate_laplacian!, distance_from_consensus
 
@@ -35,13 +35,13 @@ end
 
 
 
-function laplacian_step!(nodes::Vector{ThreadedSheafNode}, step_size::Float32)
+function laplacian_step!(nodes::Vector{<:AbstractSheafNode}, step_size::Float32)
     Threads.@threads for node in nodes
         local_laplacian_step!(node, step_size)
     end
 end
 
-function laplacian_step!(nodes::Vector{ThreadedSheafNode}, step_size::Float32, clusters::Vector{Vector{Int}})
+function laplacian_step!(nodes::Vector{<:AbstractSheafNode}, step_size::Float32, clusters::Vector{Vector{Int}})
     Threads.@threads for c in clusters
         for i in c
             local_laplacian_step!(nodes[i], step_size)
@@ -327,7 +327,7 @@ function distance_from_consensus(nodes, clusters::Vector{Vector{Int}})
 end
 
 # Returns a list of distances from consensus over the iterations
-function iterate_laplacian!(nodes::Vector{ThreadedSheafNode}, step_size, num_iters::Int)
+function iterate_laplacian!(nodes::Vector{<:AbstractSheafNode}, step_size, num_iters::Int)
     distances = Float64[]
 
     for _ in 1:num_iters
@@ -338,7 +338,7 @@ function iterate_laplacian!(nodes::Vector{ThreadedSheafNode}, step_size, num_ite
     return distances
 end
 
-function iterate_laplacian!(nodes::Vector{ThreadedSheafNode}, step_size, num_iters::Int, clusters::Vector{Vector{Int}})
+function iterate_laplacian!(nodes::Vector{<:AbstractSheafNode}, step_size, num_iters::Int, clusters::Vector{Vector{Int}})
     distances = Float64[]
 
     for _ in 1:num_iters
@@ -349,7 +349,7 @@ function iterate_laplacian!(nodes::Vector{ThreadedSheafNode}, step_size, num_ite
     return distances
 end
 
-function iterate_laplacian!(nodes::Vector{ThreadedSheafNode}, step_size, epsilon::Float64)
+function iterate_laplacian!(nodes::Vector{<:AbstractSheafNode}, step_size, epsilon::Float64)
     distances = Float64[]
 
     while true
@@ -364,7 +364,7 @@ function iterate_laplacian!(nodes::Vector{ThreadedSheafNode}, step_size, epsilon
     return distances
 end
 
-function iterate_laplacian!(nodes::Vector{ThreadedSheafNode}, step_size, epsilon::Float64, clusters::Vector{Vector{Int}})
+function iterate_laplacian!(nodes::Vector{<:AbstractSheafNode}, step_size, epsilon::Float64, clusters::Vector{Vector{Int}})
     distances = Float64[]
 
     while true
@@ -379,7 +379,7 @@ function iterate_laplacian!(nodes::Vector{ThreadedSheafNode}, step_size, epsilon
     return distances
 end
 
-function iterate_laplacian!(nodes::Vector{ThreadedSheafNode}, num_iters::Int)
+function iterate_laplacian!(nodes::Vector{<:AbstractSheafNode}, num_iters::Int)
     distances = Float64[]
     dimensions = (n -> n.dimension).(nodes)
     delta_x = [Vector{Float32}(undef, d) for d in dimensions]
@@ -393,7 +393,7 @@ function iterate_laplacian!(nodes::Vector{ThreadedSheafNode}, num_iters::Int)
     return distances
 end
 
-function iterate_laplacian!(nodes::Vector{ThreadedSheafNode}, num_iters::Int, clusters::Vector{Vector{Int}})
+function iterate_laplacian!(nodes::Vector{<:AbstractSheafNode}, num_iters::Int, clusters::Vector{Vector{Int}})
     distances = Float64[]
     dimensions = (n -> n.dimension).(nodes)
     delta_x = [Vector{Float32}(undef, d) for d in dimensions]
@@ -405,7 +405,7 @@ function iterate_laplacian!(nodes::Vector{ThreadedSheafNode}, num_iters::Int, cl
     return distances
 end
 
-function iterate_laplacian!(nodes::Vector{ThreadedSheafNode}, epsilon::Float64)
+function iterate_laplacian!(nodes::Vector{<:AbstractSheafNode}, epsilon::Float64)
     distances = Float64[]
     dimensions = (n -> n.dimension).(nodes)
     delta_x = [Vector{Float32}(undef, d) for d in dimensions]
@@ -421,7 +421,7 @@ function iterate_laplacian!(nodes::Vector{ThreadedSheafNode}, epsilon::Float64)
     return distances
 end
 
-function iterate_laplacian!(nodes::Vector{ThreadedSheafNode}, epsilon::Float64, clusters::Vector{Vector{Int}})
+function iterate_laplacian!(nodes::Vector{<:AbstractSheafNode}, epsilon::Float64, clusters::Vector{Vector{Int}})
     distances = Float64[]
     dimensions = (n -> n.dimension).(nodes)
     delta_x = [Vector{Float32}(undef, d) for d in dimensions]
@@ -439,7 +439,7 @@ end
 
 
 # Randomly reinitialize the nodes states
-function random_initialization(nodes::Vector{ThreadedSheafNode})
+function random_initialization(nodes::Vector{<:AbstractSheafNode})
     for node in nodes
         x = rand(node.dimension)
         node.x = x
@@ -508,12 +508,61 @@ end
 #     return nodes
 # end
 
-function local_laplacian_step_async!(node::ThreadedSheafNode, step_size, prob_update::Float64, prob_broadcast::Float64)
+
+function random_async_threaded_sheaf(num_nodes, edge_probability, restriction_map_dimension, restriction_map_density, B)
+    nodes = AsyncSheafNode[]
+    coin()::Bool = rand() < edge_probability
+    n, p = restriction_map_dimension, restriction_map_density
+    period = rand(1:B)
+    phase = rand(0:period-1)
+    for i in 1:num_nodes
+        push!(nodes, AsyncSheafNode(i, n,
+            Dict{Int32,SparseMatrixCSC{Float32,Int32}}(),
+            Dict{Int32,Channel}(),
+            Dict{Int32,Channel}(), rand(n), 
+            period, phase, 0)
+            )
+    end
+
+    for i in 1:num_nodes
+        for j in i+1:num_nodes
+            if coin()
+                A = sprand(n, n, p)
+                B = sprand(n, n, p)
+
+                nodes[i].neighbors[j] = A
+                nodes[j].neighbors[i] = B
+
+                i_to_j_channel = Channel{Vector{Float32}}(2)
+                j_to_i_channel = Channel{Vector{Float32}}(2)
+
+                nodes[i].in_channels[j] = j_to_i_channel
+                nodes[i].out_channels[j] = i_to_j_channel
+                put!(i_to_j_channel, A * nodes[i].x)
+
+                nodes[j].in_channels[i] = i_to_j_channel
+                nodes[j].out_channels[i] = j_to_i_channel
+                put!(j_to_i_channel, B * nodes[j].x)
+            end
+        end
+    end
+    return nodes
+end
+
+
+
+
+
+
+
+
+function local_laplacian_step!(node::AsyncSheafNode, step_size)
     x_old = node.x
     delta_x = zeros(node.dimension)
+    node.iteration += 1
 
-    # Randomly decide whether to update
-    if rand() < prob_update
+    # Update every iteration
+    # if rand() < prob_update
         for (n, rm) in node.neighbors
             outgoing_edge_val = rm * x_old
             incoming_edge_val = fetch(node.in_channels[n])
@@ -521,10 +570,10 @@ function local_laplacian_step_async!(node::ThreadedSheafNode, step_size, prob_up
         end
         x_new = x_old + step_size * delta_x
         node.x = x_new
-    end
+    # end
 
-    # Randomly decide whether to broadcast
-    if rand() < prob_broadcast
+    # Broadcast every phase
+    if node.iteration % node.period == node.phase
         for (n, rm) in node.neighbors
             take!(node.out_channels[n])
             put!(node.out_channels[n], rm * node.x)
@@ -532,38 +581,40 @@ function local_laplacian_step_async!(node::ThreadedSheafNode, step_size, prob_up
     end
 end
 
-function laplacian_step_async!(nodes::Vector{ThreadedSheafNode}, step_size::Float32, prob_update::Float64, prob_broadcast::Float64)
-    Threads.@threads for node in nodes
-        local_laplacian_step_async!(node, step_size, prob_update, prob_broadcast)
-    end
-end
 
-function iterate_laplacian_async!(nodes::Vector{ThreadedSheafNode}, step_size, epsilon::Float64, prob_update::Float64, prob_broadcast::Float64)
-    distances = Float64[]
 
-    while true
-        push!(distances, distance_from_consensus(nodes))
-        laplacian_step_async!(nodes, step_size, prob_update, prob_broadcast)
+# function laplacian_step_async!(nodes::Vector{<:AbstractSheafNode}, step_size::Float32, prob_update::Float64, prob_broadcast::Float64)
+#     Threads.@threads for node in nodes
+#         local_laplacian_step_async!(node, step_size, prob_update, prob_broadcast)
+#     end
+# end
 
-        if distances[end] <= epsilon
-            break
-        end
-    end
-    push!(distances, distance_from_consensus(nodes))
-    return distances
-end
+# function iterate_laplacian_async!(nodes::Vector{<:AbstractSheafNode}, step_size, epsilon::Float64, prob_update::Float64, prob_broadcast::Float64)
+#     distances = Float64[]
 
-# Returns a list of distances from consensus over the iterations
-function iterate_laplacian_async!(nodes::Vector{ThreadedSheafNode}, step_size, num_iters::Int, prob_update::Float64, prob_broadcast::Float64)
-    distances = Float64[]
+#     while true
+#         push!(distances, distance_from_consensus(nodes))
+#         laplacian_step_async!(nodes, step_size, prob_update, prob_broadcast)
 
-    for _ in 1:num_iters
-        push!(distances, distance_from_consensus(nodes))
-        laplacian_step_async!(nodes, step_size, prob_update, prob_broadcast)
-    end
-    push!(distances, distance_from_consensus(nodes))
-    return distances
-end
+#         if distances[end] <= epsilon
+#             break
+#         end
+#     end
+#     push!(distances, distance_from_consensus(nodes))
+#     return distances
+# end
+
+# # Returns a list of distances from consensus over the iterations
+# function iterate_laplacian_async!(nodes::Vector{<:AbstractSheafNode}, step_size, num_iters::Int, prob_update::Float64, prob_broadcast::Float64)
+#     distances = Float64[]
+
+#     for _ in 1:num_iters
+#         push!(distances, distance_from_consensus(nodes))
+#         laplacian_step_async!(nodes, step_size, prob_update, prob_broadcast)
+#     end
+#     push!(distances, distance_from_consensus(nodes))
+#     return distances
+# end
 
 
 end
