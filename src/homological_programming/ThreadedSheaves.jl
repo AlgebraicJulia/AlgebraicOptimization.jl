@@ -1,6 +1,6 @@
 module ThreadedSheaves
 
-export random_threaded_sheaf, random_async_threaded_sheaf, random_initialization, initialize!, compute_clusters, threaded_sheaf, laplacian_step!, iterate_laplacian!, iterate_laplacian_async!, distance_from_consensus
+export random_threaded_sheaf, random_async_threaded_sheaf, random_initialization, initialize!, compute_clusters, threaded_sheaf, laplacian_step!, iterate_laplacian!, iterate_laplacian_async!, distance_from_consensus, lipschitz_constant
 
 import ..DistributedSheaves: iterate_laplacian!, distance_from_consensus
 
@@ -580,6 +580,40 @@ function local_laplacian_step!(node::AsyncSheafNode, step_size)
         end
     end
 end
+
+# Note:  Assumes all vertex and edge stalks have the same dimension
+function lipschitz_constant(nodes::Vector{<:AbstractSheafNode})
+    nverts = length(nodes)
+    d = nodes[1].dimension
+    # Count edges and assign edge indices
+    edge_tuples = Tuple{Int,Int}[]
+    for i in 1:nverts
+        for (j, _) in nodes[i].neighbors
+            if i < j
+                push!(edge_tuples, (i, j))
+            end
+        end
+    end
+    nedges = length(edge_tuples)
+    δ = zeros(Float32, nedges*d, nverts*d)
+    edge_idx = 1
+    for (i, j) in edge_tuples
+        A = nodes[i].neighbors[j]
+        B = nodes[j].neighbors[i]
+        # Place A in δ[edge, i]
+        δ[(edge_idx-1)*d+1:edge_idx*d, (i-1)*d+1:i*d] .= A
+        # Place -B in δ[edge, j]
+        δ[(edge_idx-1)*d+1:edge_idx*d, (j-1)*d+1:j*d] .= -B
+        edge_idx += 1
+    end
+    # return δ
+
+    L = δ' * δ
+    K = opnorm(Matrix(L))
+    return K
+end
+
+
 
 
 

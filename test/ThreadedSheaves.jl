@@ -19,7 +19,14 @@ loss = iterate_laplacian!(nodes, step_size, convergence_threshold)
 
 
 # Async version of laplacian iteration on threaded sheaf nodes. phase <= period <= B.
-nodes = random_async_threaded_sheaf(8, 0.3, 10, 0.3, 1000)
+N = 8
+B = 1000
+nodes = random_async_threaded_sheaf(N, 0.3, 10, 0.3, B)
+K = lipschitz_constant(nodes)
+
+step_size = 2 / (K * (1 + 2 * sqrt(N) * B))
+
+
 random_initialization(nodes)
 
 convergence_threshold = 1.0
