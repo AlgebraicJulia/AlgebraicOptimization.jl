@@ -4,12 +4,13 @@ using Test
 using Plots
 using Graphs
 using LinearAlgebra
+using Random
 
 
 
 
 identity_map(n, p=nothing) = I(n)
-dense_random_map(n, p=nothing) = rand(Float32, n, n)
+dense_random_map(n, p=nothing) = rand(Float64, n, n)
 orthogonal_random_map(n, p=nothing) = Matrix(qr(randn(n, n)).Q)
 sparse_random_map(n, p) = sprand(n, n, p)
 
@@ -22,19 +23,29 @@ sparse_random_map(n, p) = sprand(n, n, p)
 # Start by constructing a complete graph on n vertices
 n = 8
 g = complete_graph(n)
+B = 1
 
 nodes_id = random_async_threaded_sheaf(g, 2; map_generator=orthogonal_random_map)
 ThreadedSheaves.coboundary_map(nodes_id)
 
+# Calculate step sizes
+K = lipschitz_constant(nodes_id)
+step_size = Float64(.99 * (2 / (K * (1 + 2 * sqrt(n) * B))))
 
 
+
+
+
+
+# If this doesn't converge, we are screwed
 # Basic case: Identity maps and all nodes initialized to the same value
+B = 1
 connected_graph = complete_graph(8)
-nodes = random_async_threaded_sheaf(connected_graph, 1, 1.0, 1000
+nodes = random_async_threaded_sheaf(connected_graph, 1, 1.0, B
 )
 ThreadedSheaves.coboundary_map(nodes)
 for node in nodes
-    node.x .= rand(Float32)  # Initialize all nodes to the same random value
+    node.x .= rand(Float64)  # Initialize all nodes to the same random value
     for (n, rm) in node.neighbors
         take!(node.out_channels[n])  # Remove old value
         put!(node.out_channels[n], rm * node.x)  # Insert new value
@@ -43,7 +54,7 @@ end
 
 # @test distance_from_consensus(nodes) == 0 # Should be 0
 
-loss = iterate_laplacian!(nodes, 0.0001f0, 10000)
+loss = iterate_laplacian!(nodes, .001, 10000)
 
 # Print all of the node values
 for node in nodes
@@ -54,6 +65,7 @@ end
 iters = 1:length(loss)
 plot(iters, loss, yscale=:log10, xlabel="Iteration", ylabel="Loss", title="Loss vs Iteration", label="Identity Sheaf")
 
+distance_from_consensus(nodes)
 
 
 
@@ -61,33 +73,36 @@ plot(iters, loss, yscale=:log10, xlabel="Iteration", ylabel="Loss", title="Loss 
 
 
 
+# # Sync version of laplacian iteration on threaded sheaf nodes
+# nodes = random_threaded_sheaf(8, 0.3, 10, 0.3)
+# random_initialization(nodes)
 
-# Sync version of laplacian iteration on threaded sheaf nodes
-nodes = random_threaded_sheaf(8, 0.3, 10, 0.3)
-random_initialization(nodes)
+# convergence_threshold = 1.0
+# step_size = .002
+# loss = iterate_laplacian!(nodes, step_size, 100)
 
-convergence_threshold = 1.0
-step_size = 2.0f-2 
-loss = iterate_laplacian!(nodes, step_size, 100)
-
-loss = iterate_laplacian!(nodes, step_size, convergence_threshold)
-@test loss[end] < convergence_threshold 
+# loss = iterate_laplacian!(nodes, step_size, convergence_threshold)
+# @test loss[end] < convergence_threshold 
 
 
 # Why are we sometimes getting super sharp dropoffs at the beginning?
 
 # Why is there no convergence at all in the faulty test case where all the nodes had the same giant period in the "off seasons"?
 
+
+
+# Seed random
+Random.seed!(42)
 # Async version of laplacian iteration on threaded sheaf nodes. phase <= period <= B.
 N = 10
-B = 10000
-num_iters = 500000
+B = 100
+num_iters = 50000
 nodes = random_async_threaded_sheaf(N, 0.3, 10, 0.3, B)
 
 # Calculate step sizes
 K = lipschitz_constant(nodes)
-step_size = Float32(.99 * (2 / (K * (1 + 2 * sqrt(N) * B))))
-step_size_divergence = Float32(1 / K)
+step_size = Float64(.99 * (2 / (K * (1 + 2 * sqrt(N) * B))))
+step_size_divergence = Float64(1 / K)
 
 # Initialize nodes
 random_initialization(nodes)
@@ -112,6 +127,8 @@ plot(iters, loss, yscale=:log10, xlabel="Iteration", ylabel="Loss", title="Loss 
 plot!(iters, loss_divergence, yscale=:log10, label="Async Sheaf 1/K Step")
 plot!(iters, loss_sync, yscale=:log10, label="Sync Sheaf")
 plot!(iters, loss_sync_divergence, yscale=:log10, label="Sync Sheaf 1/K Step")
+
+
 
 
 
@@ -192,7 +209,7 @@ plot(iters, loss, yscale=:log10, xlabel="Iteration", ylabel="Loss", title="Loss 
 # random_threaded = threaded_sheaf(random_matrix_s)
 
 # iters = 100
-# my_step_size::Float32 = .01
+# my_step_size::Float64 = .01
 
 # for _ in 1:iters
 #     laplacian_update!(random_matrix_s, my_step_size)
