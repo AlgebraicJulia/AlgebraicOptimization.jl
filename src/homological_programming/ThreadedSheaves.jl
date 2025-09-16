@@ -292,21 +292,37 @@ function compute_clusters(g::Graph, num_clusters::Int)
     return clusters
 end
 
+# function distance_from_consensus(nodes)
+#     #total_distance = 0.0
+#     node_distances = zeros(length(nodes))
+#     #Threads.@threads for (i,node) in zip(collect(1:length(nodes)),nodes)
+#     Threads.@threads for i in eachindex(nodes)
+#         node_distance = 0.0
+#         # There is some double counting happening in here but idrc
+#         for ((_, in_channel), (_, out_channel)) in zip(nodes[i].in_channels, nodes[i].out_channels)
+#             node_distance += norm(fetch(in_channel) - fetch(out_channel))
+#         end
+#         #total_distance += node_distance
+#         node_distances[i] = node_distance
+#     end
+#     return sum(node_distances)
+# end
+
 function distance_from_consensus(nodes)
-    #total_distance = 0.0
-    node_distances = zeros(length(nodes))
-    #Threads.@threads for (i,node) in zip(collect(1:length(nodes)),nodes)
-    Threads.@threads for i in eachindex(nodes)
-        node_distance = 0.0
-        # There is some double counting happening in here but idrc
-        for ((_, in_channel), (_, out_channel)) in zip(nodes[i].in_channels, nodes[i].out_channels)
-            node_distance += norm(fetch(in_channel) - fetch(out_channel))
+    total_distance = 0.0
+    for i in eachindex(nodes)
+        xi = nodes[i].x
+        for (j, rm) in nodes[i].neighbors
+            xj = nodes[j].x
+            # Compare restriction maps applied to each node's state
+            total_distance += norm(rm * xi - nodes[j].neighbors[i] * xj)
         end
-        #total_distance += node_distance
-        node_distances[i] = node_distance
     end
-    return sum(node_distances)
+    return total_distance / 2  # divide by 2 to avoid double counting
 end
+
+
+
 
 function distance_from_consensus(nodes, clusters::Vector{Vector{Int}})
     #total_distance = 0.0
@@ -513,9 +529,11 @@ function random_async_threaded_sheaf(num_nodes, edge_probability, restriction_ma
     nodes = AsyncSheafNode[]
     coin()::Bool = rand() < edge_probability
     n, p, B = restriction_map_dimension, restriction_map_density, max_communication_delay
-    for i in 1:num_nodes
         period = rand(1:B)
+        println("Everyone has the same period: $period")
         phase = rand(0:period-1)
+    for i in 1:num_nodes
+
         push!(nodes, AsyncSheafNode(i, n,
             Dict{Int64,SparseMatrixCSC{Float64,Int64}}(),
             Dict{Int64,Channel}(),

@@ -94,9 +94,11 @@ distance_from_consensus(nodes)
 # Seed random
 Random.seed!(42)
 # Async version of laplacian iteration on threaded sheaf nodes. phase <= period <= B.
+# Large problem: Even in the completely synchronous case with 10^5 iterations, this still seems to not get very small. Like, it's still .05 after 10^5 iterations. Is this just a poorly conditioned problem?
+
 N = 10
-B = 100
-num_iters = 50000
+B = 10
+num_iters = 100
 nodes = random_async_threaded_sheaf(N, 0.3, 10, 0.3, B)
 
 # Calculate step sizes
