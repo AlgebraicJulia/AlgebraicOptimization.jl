@@ -513,9 +513,9 @@ function random_async_threaded_sheaf(num_nodes, edge_probability, restriction_ma
     nodes = AsyncSheafNode[]
     coin()::Bool = rand() < edge_probability
     n, p = restriction_map_dimension, restriction_map_density
-    period = rand(1:B)
-    phase = rand(0:period-1)
     for i in 1:num_nodes
+        period = rand(1:B)
+        phase = rand(0:period-1)
         push!(nodes, AsyncSheafNode(i, n,
             Dict{Int32,SparseMatrixCSC{Float32,Int32}}(),
             Dict{Int32,Channel}(),

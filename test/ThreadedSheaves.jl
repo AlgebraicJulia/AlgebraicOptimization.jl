@@ -2,6 +2,7 @@ using AlgebraicOptimization
 using BlockArrays
 using Test
 using Plots
+# using DeepCopy
 
 
 # Sync version of laplacian iteration on threaded sheaf nodes
@@ -16,27 +17,47 @@ loss = iterate_laplacian!(nodes, step_size, convergence_threshold)
 @test loss[end] < convergence_threshold 
 
 
+# Why are we sometimes getting super sharp dropoffs at the beginning?
 
+# Why is there no convergence at all in the faulty test case where all the nodes had the same giant period in the "off seasons"?
 
 # Async version of laplacian iteration on threaded sheaf nodes. phase <= period <= B.
-N = 8
-B = 1000
+N = 10
+B = 10000
+num_iters = 50000
 nodes = random_async_threaded_sheaf(N, 0.3, 10, 0.3, B)
+
+# Calculate step sizes
 K = lipschitz_constant(nodes)
+step_size = Float32(.99 * (2 / (K * (1 + 2 * sqrt(N) * B))))
+step_size_divergence = Float32(1 / K)
 
-step_size = 2 / (K * (1 + 2 * sqrt(N) * B))
-
-
+# Initialize nodes
 random_initialization(nodes)
+nodes_divergence = deepcopy(nodes)
+nodes_sync = deepcopy(nodes)
 
-convergence_threshold = 1.0
-step_size = 2.0f-2 
-prob_update = 0.8
-prob_broadcast = 0.1
-loss = iterate_laplacian!(nodes, step_size, 100000)
+for n in nodes_sync  # Set all nodes to be perfectly synchronized
+    n.period = 1
+    n.phase = 0
+end
+nodes_sync_divergence = deepcopy(nodes_sync)
 
+# Run iterations
+loss = iterate_laplacian!(nodes, step_size, num_iters)
+loss_divergence = iterate_laplacian!(nodes_divergence, step_size_divergence, num_iters)
+loss_sync = iterate_laplacian!(nodes_sync, step_size, num_iters)
+loss_sync_divergence = iterate_laplacian!(nodes_sync_divergence, step_size_divergence, num_iters)
+
+# Plot results
 iters = 1:length(loss)
-plot(iters, 1 ./ loss, xlabel="Iteration", ylabel="1 / Loss", title="Inverse Loss vs Iteration", legend=false)
+plot(iters, loss, yscale=:log10, xlabel="Iteration", ylabel="Loss", title="Loss vs Iteration", label="Async Sheaf")
+plot!(iters, loss_divergence, yscale=:log10, label="Async Sheaf 1/K Step")
+plot!(iters, loss_sync, yscale=:log10, label="Sync Sheaf")
+plot!(iters, loss_sync_divergence, yscale=:log10, label="Sync Sheaf 1/K Step")
+
+
+
 
 
 
