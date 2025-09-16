@@ -98,8 +98,8 @@ Random.seed!(42)
 
 N = 10
 B = 10
-num_iters = 100
-nodes = random_async_threaded_sheaf(N, 0.3, 10, 0.3, B)
+num_iters = 10000
+nodes = random_async_threaded_sheaf(N, 0.3, 10, 0.3, 1)
 
 # Calculate step sizes
 K = lipschitz_constant(nodes)

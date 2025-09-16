@@ -529,11 +529,9 @@ function random_async_threaded_sheaf(num_nodes, edge_probability, restriction_ma
     nodes = AsyncSheafNode[]
     coin()::Bool = rand() < edge_probability
     n, p, B = restriction_map_dimension, restriction_map_density, max_communication_delay
-        period = rand(1:B)
-        println("Everyone has the same period: $period")
-        phase = rand(0:period-1)
     for i in 1:num_nodes
-
+        period = rand(1:B)
+        phase = rand(0:period-1)
         push!(nodes, AsyncSheafNode(i, n,
             Dict{Int64,SparseMatrixCSC{Float64,Int64}}(),
             Dict{Int64,Channel}(),
@@ -574,10 +572,9 @@ function random_async_threaded_sheaf(g::Graph, restriction_map_dimension, restri
     nodes = AsyncSheafNode[]
     n, p, B = restriction_map_dimension, restriction_map_density, max_communication_delay
 
+    for i in 1:nv(g)
         period = rand(1:B)
         phase = rand(0:period-1)
-    for i in 1:nv(g)
-
         push!(nodes, AsyncSheafNode(i, n,
             Dict{Int64,SparseMatrixCSC{Float64,Int64}}(),
             Dict{Int64,Channel}(),
