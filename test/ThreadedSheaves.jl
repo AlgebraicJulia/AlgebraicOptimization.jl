@@ -2,7 +2,64 @@ using AlgebraicOptimization
 using BlockArrays
 using Test
 using Plots
-# using DeepCopy
+using Graphs
+using LinearAlgebra
+
+
+
+
+identity_map(n, p=nothing) = I(n)
+dense_random_map(n, p=nothing) = rand(Float32, n, n)
+orthogonal_random_map(n, p=nothing) = Matrix(qr(randn(n, n)).Q)
+sparse_random_map(n, p) = sprand(n, n, p)
+
+
+
+
+
+# Construct a random threaded sheaf from a graph
+
+# Start by constructing a complete graph on n vertices
+n = 8
+g = complete_graph(n)
+
+nodes_id = random_async_threaded_sheaf(g, 2; map_generator=orthogonal_random_map)
+ThreadedSheaves.coboundary_map(nodes_id)
+
+
+
+# Basic case: Identity maps and all nodes initialized to the same value
+connected_graph = complete_graph(8)
+nodes = random_async_threaded_sheaf(connected_graph, 1, 1.0, 1000
+)
+ThreadedSheaves.coboundary_map(nodes)
+for node in nodes
+    node.x .= rand(Float32)  # Initialize all nodes to the same random value
+    for (n, rm) in node.neighbors
+        take!(node.out_channels[n])  # Remove old value
+        put!(node.out_channels[n], rm * node.x)  # Insert new value
+    end
+end
+
+# @test distance_from_consensus(nodes) == 0 # Should be 0
+
+loss = iterate_laplacian!(nodes, 0.0001f0, 10000)
+
+# Print all of the node values
+for node in nodes
+    println("Node $(node.id): ", node.x)
+end
+
+# Plot results
+iters = 1:length(loss)
+plot(iters, loss, yscale=:log10, xlabel="Iteration", ylabel="Loss", title="Loss vs Iteration", label="Identity Sheaf")
+
+
+
+
+
+
+
 
 
 # Sync version of laplacian iteration on threaded sheaf nodes
@@ -24,7 +81,7 @@ loss = iterate_laplacian!(nodes, step_size, convergence_threshold)
 # Async version of laplacian iteration on threaded sheaf nodes. phase <= period <= B.
 N = 10
 B = 10000
-num_iters = 50000
+num_iters = 500000
 nodes = random_async_threaded_sheaf(N, 0.3, 10, 0.3, B)
 
 # Calculate step sizes

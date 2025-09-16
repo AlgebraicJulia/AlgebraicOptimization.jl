@@ -1,6 +1,6 @@
 module ThreadedSheaves
 
-export random_threaded_sheaf, random_async_threaded_sheaf, random_initialization, initialize!, compute_clusters, threaded_sheaf, laplacian_step!, iterate_laplacian!, iterate_laplacian_async!, distance_from_consensus, lipschitz_constant
+export random_threaded_sheaf, random_async_threaded_sheaf, random_initialization, initialize!, compute_clusters, threaded_sheaf, laplacian_step!, iterate_laplacian!, iterate_laplacian_async!, distance_from_consensus, lipschitz_constant, coboundary_map
 
 import ..DistributedSheaves: iterate_laplacian!, distance_from_consensus
 
@@ -509,10 +509,10 @@ end
 # end
 
 
-function random_async_threaded_sheaf(num_nodes, edge_probability, restriction_map_dimension, restriction_map_density, B)
+function random_async_threaded_sheaf(num_nodes, edge_probability, restriction_map_dimension, restriction_map_density, max_communication_delay)
     nodes = AsyncSheafNode[]
     coin()::Bool = rand() < edge_probability
-    n, p = restriction_map_dimension, restriction_map_density
+    n, p, B = restriction_map_dimension, restriction_map_density, max_communication_delay
     for i in 1:num_nodes
         period = rand(1:B)
         phase = rand(0:period-1)
@@ -551,9 +551,94 @@ end
 
 
 
+# Pass in a function to make a certain type of restriction map?
+function random_async_threaded_sheaf(g::Graph, restriction_map_dimension, restriction_map_density, max_communication_delay)
+    nodes = AsyncSheafNode[]
+    n, p, B = restriction_map_dimension, restriction_map_density, max_communication_delay
+
+    for i in 1:nv(g)
+        period = rand(1:B)
+        phase = rand(0:period-1)
+        push!(nodes, AsyncSheafNode(i, n,
+            Dict{Int32,SparseMatrixCSC{Float32,Int32}}(),
+            Dict{Int32,Channel}(),
+            Dict{Int32,Channel}(), rand(n), period, phase, 0))
+    end
+
+    for e in edges(g)
+        # A = sprand(n, n, p)
+        # B = sprand(n, n, p)
+        A = I(n)
+        B = I(n)
+
+        i, j = src(e), dst(e)
+
+        nodes[i].neighbors[j] = A
+        nodes[j].neighbors[i] = B
+
+        i_to_j_channel = Channel{Vector{Float32}}(2)
+        j_to_i_channel = Channel{Vector{Float32}}(2)
+
+        nodes[i].in_channels[j] = j_to_i_channel
+        nodes[i].out_channels[j] = i_to_j_channel
+        put!(i_to_j_channel, A * nodes[i].x)
+
+        nodes[j].in_channels[i] = i_to_j_channel
+        nodes[j].out_channels[i] = j_to_i_channel
+        put!(j_to_i_channel, B * nodes[j].x)
+    end
+
+    return nodes
+end
 
 
+# More generic version where you can pass in a function to generate the restriction maps
+# Map generator should take in dimension and density (density can be nothing)
 
+function random_async_threaded_sheaf(
+    g::Graph,
+    restriction_map_dimension;
+    restriction_map_density=nothing,
+    max_communication_delay=1,
+    map_generator=(n, p=nothing) -> I(n)
+)
+    println("Using map generator: $map_generator")
+    nodes = AsyncSheafNode[]
+    n = restriction_map_dimension
+    p = restriction_map_density
+    B = max_communication_delay
+
+    for i in 1:nv(g)
+        period = rand(1:B)
+        phase = rand(0:period-1)
+        push!(nodes, AsyncSheafNode(i, n,
+            Dict{Int32,SparseMatrixCSC{Float32,Int32}}(),
+            Dict{Int32,Channel}(),
+            Dict{Int32,Channel}(), rand(n), period, phase, 0))
+    end
+
+    for e in edges(g)
+        i, j = src(e), dst(e)
+        A = map_generator(n, p)
+        Bmat = map_generator(n, p)
+
+        nodes[i].neighbors[j] = A
+        nodes[j].neighbors[i] = Bmat
+
+        i_to_j_channel = Channel{Vector{Float32}}(2)
+        j_to_i_channel = Channel{Vector{Float32}}(2)
+
+        nodes[i].in_channels[j] = j_to_i_channel
+        nodes[i].out_channels[j] = i_to_j_channel
+        put!(i_to_j_channel, A * nodes[i].x)
+
+        nodes[j].in_channels[i] = i_to_j_channel
+        nodes[j].out_channels[i] = j_to_i_channel
+        put!(j_to_i_channel, Bmat * nodes[j].x)
+    end
+
+    return nodes
+end
 
 
 function local_laplacian_step!(node::AsyncSheafNode, step_size)
@@ -582,7 +667,7 @@ function local_laplacian_step!(node::AsyncSheafNode, step_size)
 end
 
 # Note:  Assumes all vertex and edge stalks have the same dimension
-function lipschitz_constant(nodes::Vector{<:AbstractSheafNode})
+function coboundary_map(nodes::Vector{<:AbstractSheafNode})
     nverts = length(nodes)
     d = nodes[1].dimension
     # Count edges and assign edge indices
@@ -606,8 +691,12 @@ function lipschitz_constant(nodes::Vector{<:AbstractSheafNode})
         δ[(edge_idx-1)*d+1:edge_idx*d, (j-1)*d+1:j*d] .= -B
         edge_idx += 1
     end
-    # return δ
+    return δ
+end
 
+
+function lipschitz_constant(nodes::Vector{<:AbstractSheafNode})
+    δ = coboundary_map(nodes)
     L = δ' * δ
     K = opnorm(Matrix(L))
     return K
