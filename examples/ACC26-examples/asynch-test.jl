@@ -3,6 +3,7 @@ using LinearAlgebra
 using SparseArrays
 using Plots
 using Random
+using BlockArrays
 
 Random.seed!(1234)
 
@@ -22,7 +23,7 @@ L = Array(sparse(sheaf_laplacian_matrix(s)))
 # Test standard synchronous gradient descent convergence with theoretically optimal stepsize.
 K = opnorm(L, 2)
 
-B = 10000
+B = 100
 
 
 γ_synch = 1 / K
