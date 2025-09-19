@@ -124,7 +124,7 @@ Computes the trajectory of the system under asynchronous updates.
 Randomness of delays is controlled by the provided RNG.
 Returns the loss history and the state history.
 """
-function compute_trajectory(rng::AbstractRNG, L, x0, γ, num_blocks, block_size; B_min=1, B_max=1, max_iters=1000, tol=1e-8)
+function compute_trajectory(rng::AbstractRNG, L, x0, γ, num_blocks, block_size; B_min=1, B_max=1, max_iters=1000, tol=1e-10)
     f = energy_function(L)
     global_state = BlockArray(x0, repeat([block_size], num_blocks))
     local_states = BlockArray(hcat([global_state for _ in 1:num_blocks]...), repeat([block_size], num_blocks), ones(Int, num_blocks))
@@ -148,9 +148,11 @@ function compute_trajectory(rng::AbstractRNG, L, x0, γ, num_blocks, block_size;
         end
         push!(state_history, Vector(global_state))
         push!(losses, f(global_state))
+        #=
         if losses[end] < tol || losses[end] > 1e10 # Stop if it converges or diverges wildly
             break
         end
+        =#
     end
     return losses, state_history
 end
@@ -248,15 +250,16 @@ function run_experiment(config,seeds::ExperimentSeeds)
 
     plot_epsilon = 1e-16 # Small constant to avoid log(0)
 
-    p1 = plot(yscale=:log10, title="Sync v.s. Async", xlabel="t", ylabel="alpha(t)", ylims=(plot_epsilon, Inf))
+    p1 = plot(yscale=:log10, title="", xlabel="t", ylabel="alpha(t)", ylims=(plot_epsilon, Inf))
     plot!(p1, alpha_sync .+ plot_epsilon, label="sync", color=:blue, alpha=0.75)
     plot!(p1, alpha_async .+ plot_epsilon, label="async", color=:orange, alpha=0.75)
     
     p2 = plot(yscale=:log10, title="", xlabel="t", ylabel="beta(t)", ylims=(plot_epsilon, Inf))
-    plot!(p2, beta_sync .+ plot_epsilon, label="", color=:blue, alpha=0.75)
-    plot!(p2, beta_async .+ plot_epsilon, label="", color=:orange, alpha=0.75)
+    plot!(p2, beta_sync[B_max+1:end] .+ plot_epsilon, label="sync", color=:blue, alpha=0.75)
+    plot!(p2, beta_async[B_max+1:end] .+ plot_epsilon, label="async", color=:orange, alpha=0.75)
 
-    display(plot(p1, p2, layout = (2,1)))
+    display(p1)
+    display(p2)
 
     return (alpha_sync, alpha_async), (beta_sync, beta_async)
 end
