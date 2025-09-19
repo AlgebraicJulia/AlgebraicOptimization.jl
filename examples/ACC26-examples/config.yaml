@@ -1,0 +1,14 @@
+sheaf:
+  type: "bundle"
+  vertex_dim: 5
+  edge_dim: 5
+  normalize: false
+graph:
+  num_nodes: 20
+  degree: 4
+alg:
+  step-size: 0.1
+  num_iters: 1000
+  delay_min: 50
+  delay_max: 50
+

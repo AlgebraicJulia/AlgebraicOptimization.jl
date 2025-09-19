@@ -6,6 +6,7 @@ using Random
 using BlockArrays
 using Graphs
 using Distributions
+using YAML
 
 # Structure to hold seeds for all random components of the experiment
 struct ExperimentSeeds
@@ -65,6 +66,10 @@ function block_normalize_matrix(L::AbstractMatrix, num_blocks::Int, block_size::
 end
 
 function smallest_nonzero_eigenvalue(M::AbstractMatrix; tol=1e-9)
+    if !issymmetric(M)
+        @warn "Matrix is not symmetric. Eigenvalues may be complex."
+    end
+    
     eigenvalues = eigvals(Symmetric(M))
     nonzero_eigenvalues = filter(e -> abs(e) > tol, eigenvalues)
     if isempty(nonzero_eigenvalues)
@@ -104,7 +109,7 @@ function sheaf_from_graph(rng::AbstractRNG, g::Graph, vertex_dim::Int, edge_dim:
                 error("Type Error: vertex dimension must equal edge_dim for a constant sheaf")
             end
             (rm_identity(rng, vertex_dim, edge_dim), rm_identity(rng, vertex_dim, edge_dim))
-        else
+        elseif style == "random"
             (rm_random(rng, vertex_dim, edge_dim), rm_random(rng, vertex_dim, edge_dim))
         end
         add_sheaf_edge!(s, i, j, rm1, rm2)
@@ -117,15 +122,18 @@ energy_function(L) = x -> 0.5 * x' * (L * x) # Dirichlet energy function
 """
 Computes the trajectory of the system under asynchronous updates.
 Randomness of delays is controlled by the provided RNG.
+Returns the loss history and the state history.
 """
 function compute_trajectory(rng::AbstractRNG, L, x0, γ, num_blocks, block_size; B_min=1, B_max=1, max_iters=1000, tol=1e-8)
     f = energy_function(L)
     global_state = BlockArray(x0, repeat([block_size], num_blocks))
     local_states = BlockArray(hcat([global_state for _ in 1:num_blocks]...), repeat([block_size], num_blocks), ones(Int, num_blocks))
+    
+    state_history = [Vector(global_state)]
+    losses = [f(global_state)]
 
     periods = rand(rng, B_min:B_max, num_blocks)
     phases = [rand(rng, 0:periods[i]-1) for i in 1:num_blocks]
-    losses = [f(x0)]
 
     for t in 1:max_iters
         g = BlockArray(L * local_states, repeat([block_size], num_blocks), ones(Int, num_blocks)) # every agent computes a local update
@@ -138,27 +146,49 @@ function compute_trajectory(rng::AbstractRNG, L, x0, γ, num_blocks, block_size;
                 local_states[Block(i), :] .= x
             end
         end
+        push!(state_history, Vector(global_state))
         push!(losses, f(global_state))
-        if losses[end] < tol
+        if losses[end] < tol || losses[end] > 1e10 # Stop if it converges or diverges wildly
             break
         end
     end
-    return losses, global_state
+    return losses, state_history
 end
+
+"""
+Calculates the beta(t) metric from the paper.
+"""
+function calculate_beta(state_history, B)
+    beta_trajectory = []
+    for t in 1:length(state_history)
+        start_idx = max(1, t - B - 1)
+        end_idx = max(1, t - 1)
+        
+        sum_sq_diff = 0.0
+        for τ in start_idx:end_idx
+            if τ + 1 <= length(state_history)
+                sum_sq_diff += norm(state_history[τ+1] - state_history[τ])^2
+            end
+        end
+        push!(beta_trajectory, sum_sq_diff)
+    end
+    return beta_trajectory
+end
+
 
 """
 Main experiment runner function.
 Takes a seeds struct to ensure reproducibility.
 """
-function run_experiment(seeds::ExperimentSeeds)
+function run_experiment(config,seeds::ExperimentSeeds)
     """
     Sheaf parameters
     """
-    N = 20 # number of agents
-    degree = 4 # degree of the graph
-    vertex_dim = 5 # vertex stalk dimension
-    edge_dim = 5 # edge stalk dimension
-    sheaf_type = "constant" # choices: "bundle", "weighted", "constant"
+    N =  config["graph"]["num_nodes"] # number of agents
+    degree = config["graph"]["degree"] # degree of the graph
+    vertex_dim = config["sheaf"]["vertex_dim"] # vertex stalk dimension
+    edge_dim = config["sheaf"]["edge_dim"] # edge stalk dimension
+    sheaf_type = config["sheaf"]["type"] # choices: "bundle", "weighted", "constant"
 
     """
     Generate sheaf and normalized sheaf Laplacian
@@ -169,10 +199,14 @@ function run_experiment(seeds::ExperimentSeeds)
     sheaf_rng = MersenneTwister(seeds.sheaf_seed)
     s = sheaf_from_graph(sheaf_rng, g, vertex_dim, edge_dim; style=sheaf_type) # sheaf
     
-    L = sheaf_laplacian_matrix(s) # sheaf Laplacian
-    L = block_normalize_matrix(L, N, vertex_dim)
-    K = opnorm(L, 2) # spectral radius
-    η = smallest_nonzero_eigenvalue(L)
+    L_unnormalized = sheaf_laplacian_matrix(s)
+    if config["sheaf"]["normalize"]
+        L =  block_normalize_matrix(L_unnormalized, N, vertex_dim) # sheaf Laplacian
+    else
+        L = L_unnormalized
+    end
+    K = opnorm(L, 2) # spectral radius (Lipschitz constant K)
+    η = smallest_nonzero_eigenvalue(L) # Frustration (related to PL constant)
 
     """
     Experiment parameters
@@ -180,33 +214,86 @@ function run_experiment(seeds::ExperimentSeeds)
     init_cond_rng = MersenneTwister(seeds.init_cond_seed)
     x0 = randn(init_cond_rng, vertex_dim * N) # initial condition
 
-    B_min = 20 # minimum delay
-    B_max = 40 # maximum delay
-    γ = 0.01 # step-size
-    T = 10000 # number of iterations
+    B_min = 1
+    B_max = 1
+    if !isnothing(config["alg"]["delay_min"])
+        B_min = config["alg"]["delay_min"]
+    end
+    if !isnothing(config["alg"]["delay_max"])
+        B_max = config["alg"]["delay_max"]
+    end
+    
+    if !isnothing(config["alg"]["step-size"])
+        γ = config["alg"]["step-size"]
+    else
+        γ = 1 / K 
+    end
 
     println("Running experiment with seeds: ", seeds)
-    println("num_agents: ", N)
-    println("step_size: ", γ)
-    println("spectral_radius: ", K)
-    println("frustration: ", η)
-    println("B_max: ", B_max)
+    println("number of agents: ", N)
+    println("step-size (γ): ", γ)
+    println("spectral radius (K): ", K)
+    println("frustration (η): ", η)
+    println("Max delay (B): ", B_max)
+    println("\n")
 
     delay_rng_sync = MersenneTwister(seeds.delay_seed)
     delay_rng_async = MersenneTwister(seeds.delay_seed)
 
-    alpha_sync, _ = compute_trajectory(delay_rng_sync, L, x0, γ, N, vertex_dim; max_iters=T)
-    alpha_async, _ = compute_trajectory(delay_rng_async, L, x0, γ, N, vertex_dim; B_min=B_min, B_max=B_max, max_iters=T)
+    alpha_sync, sync_history = compute_trajectory(delay_rng_sync, L, x0, γ, N, vertex_dim; max_iters=config["alg"]["num_iters"])
+    alpha_async, async_history = compute_trajectory(delay_rng_async, L, x0, γ, N, vertex_dim; B_min=B_min, B_max=B_max, max_iters=config["alg"]["num_iters"])
 
-    p = plot(yscale=:log10, title="Sync v.s. Async", xlabel="t", ylabel="Q(x(t))") # initialize the plot
-    plot!(p, alpha_sync, label="sync", color=:blue, alpha=0.75)
-    plot!(p, alpha_async, label="async", color=:orange, alpha=0.75)
+    beta_sync = calculate_beta(sync_history, 0) # B=0 for synchronous case
+    beta_async = calculate_beta(async_history, B_max)
 
-    display(p)
+    plot_epsilon = 1e-16 # Small constant to avoid log(0)
+
+    p1 = plot(yscale=:log10, title="Sync v.s. Async", xlabel="t", ylabel="alpha(t)", ylims=(plot_epsilon, Inf))
+    plot!(p1, alpha_sync .+ plot_epsilon, label="sync", color=:blue, alpha=0.75)
+    plot!(p1, alpha_async .+ plot_epsilon, label="async", color=:orange, alpha=0.75)
+    
+    p2 = plot(yscale=:log10, title="", xlabel="t", ylabel="beta(t)", ylims=(plot_epsilon, Inf))
+    plot!(p2, beta_sync .+ plot_epsilon, label="", color=:blue, alpha=0.75)
+    plot!(p2, beta_async .+ plot_epsilon, label="", color=:orange, alpha=0.75)
+
+    display(plot(p1, p2, layout = (2,1)))
+
+    return (alpha_sync, alpha_async), (beta_sync, beta_async)
 end
 
 """
-run the experiment
+Searches for a set of seeds that causes asynchronous divergence.
 """
+function find_divergent_example(config;max_attempts=1000)
+    for attempt in 1:max_attempts
+        seeds = generate_seeds()
+        (alpha_sync, alpha_async), _ = run_experiment(config,seeds)
+
+        if alpha_sync[end] < 1e-5 && alpha_async[end] > alpha_async[1]
+            println("Found divergent example after $attempt attempts!")
+            return seeds
+        end
+        if attempt % 100 == 0
+            println("Attempt $attempt")
+        end
+    end
+    println("Could not find a divergent example after $max_attempts attempts.")
+    return nothing
+end
+
+config = YAML.load_file(joinpath(@__DIR__, "config.yaml"))
 seeds = generate_seeds()
-run_experiment(seeds)
+_ = run_experiment(config,seeds) # Assign to _ to suppress output
+println("Experiment finished. Plots are displayed above.")
+
+#=
+# Uncomment to search for a new divergent example
+divergent_seeds = find_divergent_example(config)
+
+if !isnothing(divergent_seeds)
+    run_experiment(config,divergent_seeds)
+else
+    println("No divergent example found. Try running find_divergent_example() again.")
+end
+=#
+
