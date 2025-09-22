@@ -1,10 +1,21 @@
 using AlgebraicOptimization
 using BlockArrays
 using Plots
+default(fontfamily="Computer Modern")
 using CSV
 using Tables
 
+rgb(r, g, b) = RGB(r / 255.0, g / 255.0, b / 255.0)
 
+const blue = rgb(97, 136, 178)
+const orange = rgb(223, 167, 119)
+const green = rgb(172, 207, 146)
+#const purple = rgb(216, 201, 238)
+const purple = rgb(216, 150, 238)
+#const beige = rgb(250, 238, 203)
+const beige = rgb(250, 200, 203)
+
+colors = [blue, orange, green, purple, beige]
 # Trajectory Computation Utils
 
 function compute_trajectory(L, x0, γ; max_iters=1000, tol=1e-8)
@@ -25,7 +36,7 @@ end
 
 # Pass this for an asynch sim with random periods and phases drawn from mixture model
 struct MixtureModelParams
-    dists::Vector{Distribution}
+    dists::Vector{Normal}
     weights::Vector{Float64}
 end
 
@@ -117,6 +128,32 @@ end
 
 # Plotting Utils
 
-function save_trajectory_csv(traj, filename::String)
-
+function save_trajectory(filename, trajectory)
+    CSV.write(filename, Tables.table(trajectory))
 end
+
+function save_trajectories(path, experiment_name, trajectories)
+    for (i, t) in enumerate(trajectories)
+        f = path * experiment_name * "_traj$(i).csv"
+        save_trajectory(f, t)
+    end
+end
+
+function load_trajectory(trajectory_file)
+    return CSV.File(trajectory_file) |> CSV.Tables.matrix
+end
+
+function empty_experiment_plot(title; x_label="Iteration", y_label="Energy")
+    plt = plot()
+    plot!(plt, title=title, xlabel=x_label, ylabel=y_label, thickness_scaling=1.5, legend=:bottomright)
+    return plt
+end
+
+function plot_log_loss_curve!(plt, losses, label, color)
+    plot!(plt, yscale=:log10, losses, label=label, linewidth=2) #=color=color,=#
+end
+
+function plot_loss_curve!(plt, losses, label, color)
+    plot!(plt, losses, label=label, linewidth=2) #=color=color,=#
+end
+

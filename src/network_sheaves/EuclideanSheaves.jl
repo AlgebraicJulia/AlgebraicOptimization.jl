@@ -6,6 +6,10 @@ export EuclideanSheaf, UnorderedPair, sheaf_laplacian_matrix, sheaf_from_graph, 
 
 using Graphs
 using AutoHashEquals: @auto_hash_equals
+using LinearOperators
+using Krylov
+using LinearAlgebra
+using BlockArrays
 import Base: hash, ==, isequal
 
 using ..SheafInterface
