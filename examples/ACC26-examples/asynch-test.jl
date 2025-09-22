@@ -6,6 +6,7 @@ using Random
 using BlockArrays
 using Graphs
 using Distributions
+using LinearOperators
 
 Random.seed!(1234)
 
@@ -34,11 +35,11 @@ for i in 2:n_agents
 end
 add_sheaf_edge!(s, 1, n_agents, rand(2, 4), rand(2, 4))=#
 
-rm_generator(stalk_dim) = rand(2, stalk_dim)
+rm_generator(stalk_dim) = rand(1, stalk_dim)
 #rm_generator(stalk_dim) = Matrix{Float64}(I(stalk_dim))
 
-#g = random_regular_graph(n_agents, 4)
-g = dorogovtsev_mendes(n_agents)
+g = random_regular_graph(n_agents, 4)
+#g = dorogovtsev_mendes(n_agents)
 #g = path_graph(n_agents)
 #g = erdos_renyi(n_agents, 0.2)
 #g = complete_graph(n_agents)
@@ -47,6 +48,8 @@ g = dorogovtsev_mendes(n_agents)
 
 s = sheaf_from_graph(g, 4, rm_generator)
 
+#d = coboundary_map(s)
+#L = LinearOperator(d') * LinearOperator(d)
 #L = Array(sparse(sheaf_laplacian_matrix(s)))
 L = sheaf_laplacian_matrix(s)
 
@@ -60,19 +63,19 @@ energy_function(L) = x -> 0.5 * x' * (L * x)
 
 function compute_trajectory(L, x0, γ; max_iters=1000, tol=1e-8)
     f = energy_function(L)
-    losses = [f(x0)]
+    losses = [x0]
     x_curr = x0
     for i in 1:max_iters
         x_curr = x_curr - γ * (L * x_curr)
 
         #if i % (0.01 * max_iters) == 0
-        push!(losses, f(x_curr))
+        push!(losses, x_curr)
         #end
         if f(x_curr) < tol
             break
         end
     end
-    return losses, x_curr
+    return losses
 end
 
 function compute_trajectory_asynch(L, x0, γ, nblocks, block_size; max_iters=1000, tol=1e-8, B=50)
@@ -86,12 +89,12 @@ function compute_trajectory_asynch(L, x0, γ, nblocks, block_size; max_iters=100
 
     periods = rand(mixture, nblocks)
     periods = ceil.(Int, periods)
-    println(periods)
+    #println(periods)
     #periods = repeat([B], nblocks)
     phases = [rand(0:periods[i]-1) for i in 1:nblocks]
     #phases = zeros(Int, nblocks)
     #broadcast_probs = rand(0.0:0.001:0.3, nblocks)
-    #update_probs = rand(0.5:0.001:1.0, nblocks)
+    update_probs = rand(nblocks)
 
     # Dumb test case
     #periods = [B, B]
@@ -112,12 +115,12 @@ function compute_trajectory_asynch(L, x0, γ, nblocks, block_size; max_iters=100
         # every agent computes a local update
         g = BlockArray(L * local_states, repeat([block_size], nblocks), ones(Int, nblocks))
         for i in 1:nblocks
-            #if rand() < update_probs[i]
-            # update local state
-            local_states[Block(i), Block(i)] -= γ * g[Block(i), Block(i)]
-            # update global state
-            global_state[Block(i)] = local_states[Block(i), Block(i)][:]
-            #end
+            if rand() < update_probs[i]
+                # update local state
+                local_states[Block(i), Block(i)] -= γ * g[Block(i), Block(i)]
+                # update global state
+                global_state[Block(i)] = local_states[Block(i), Block(i)][:]
+            end
             #if rand() < broadcast_probs[i]
             # if it's the right time, broadcast your local state to other agents
             if t % periods[i] == phases[i]
@@ -149,18 +152,29 @@ B = 100
 #γ_synch = 1
 γ_asynch = 2 / (K * (1 + 2 * (sqrt(n_agents) * B)))
 
-x0 = rand(5:0.001:15, 4 * n_agents)
+x0 = rand(5.0:0.001:15.0, 4 * n_agents)
 
-@time energies_synch, final_state_synch = compute_trajectory(L, x0, γ_synch; max_iters=T)
-traj_asynch = compute_trajectory_asynch(L, x0, γ_synch, n_agents, 4; B=B, max_iters=T)
-energies_asynch = energy_function(L).(traj_asynch)
+#@time energies_synch, final_state_synch = compute_trajectory(L, x0, γ_synch; max_iters=T)
+#traj_asynch = compute_trajectory_asynch(L, x0, γ_synch, n_agents, 4; B=B, max_iters=T)
+#energies_asynch = energy_function(L).(traj_asynch)
 
-plt = plot(energies_synch, yscale=:log10, title="Synch vs Asynch", xlabel="t", ylabel="Energy", label="Synch")
-plot!(plt, energies_asynch, yscale=:log10, label="Asynch")
+#plt = plot(energies_synch, yscale=:log10, title="Synch vs Asynch", xlabel="t", ylabel="Energy", label="Synch")
+#plot!(plt, energies_asynch, yscale=:log10, label="Asynch")
 
-function run_experiments(T)
+function many_initializations_experiment(T)
+    plt = plot(title="Random Initializations", xlabel="t", ylabel="Energy")
+    for i in 1:100
+        x0 = rand(-5:0.001:5, 4 * n_agents)
+        traj_asynch = compute_trajectory_asynch(L, x0, γ_synch, n_agents, 4; B=B, max_iters=T)
+        energies_asynch = energy_function(L).(traj_asynch)
+        plot!(plt, energies_asynch, yscale=:log10, label="", color=:blue, alpha=0.3)
+    end
+    return plt
+end
+
+function increase_delay_experiment(T)
     plts = []
-    x0 = rand(5:0.001:15, 4 * n_agents)
+    x0 = rand(-5:0.001:5, 4 * n_agents)
     plt = plot(title="Asynch Convergence", xlabel="t", ylabel="Energy")
     for i in 1:4
         B = 10^(i - 1)
@@ -173,6 +187,25 @@ function run_experiments(T)
     return plt
 end
 
-#plt = run_experiments(T);
+function increase_connectivity_experiment(T)
+    gs = [erdos_renyi(n_agents, p) for p in 0.3:0.1:1]
+    sheaves = [sheaf_from_graph(g, 4, rm_generator) for g in gs]
+    Ls = [sheaf_laplacian_matrix(s) for s in sheaves]
+    Ks = [opnorm(L, 2) for L in Ls]
+    γs = [1 / K for K in Ks]
+    γ = min(γs...)
+    plt = plot(title="Connectivity vs Convergence", xlabel="t", ylabel="Energy")
+    for (d, L) in zip(0.3:0.1:1, Ls)
+        x0 = rand(-5:0.001:5, 4 * n_agents)
+        traj_asynch = compute_trajectory_asynch(L, x0, γ, n_agents, 4; B=100, max_iters=T)
+        energies_asynch = energy_function(L).(traj_asynch)
 
+        plot!(plt, energies_asynch, yscale=:log10, label="p = $d")
+    end
+    return plt
+end
+
+#plt = many_initializations_experiment(T);
+#plt = increase_delay_experiment(T);
+plt = increase_connectivity_experiment(T);
 plt

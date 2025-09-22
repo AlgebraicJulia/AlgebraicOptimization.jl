@@ -1,7 +1,8 @@
 # Module for network sheaves valued in Euclidean spaces with linear restriction maps
 module EuclideanSheaves
 
-export EuclideanSheaf, UnorderedPair, sheaf_laplacian_matrix
+export EuclideanSheaf, UnorderedPair, sheaf_laplacian_matrix, sheaf_from_graph, energy_function,
+    nearest_global_section
 
 using Graphs
 using AutoHashEquals: @auto_hash_equals
@@ -45,6 +46,20 @@ R^n -> R^m represented by a matrix of type T.
 end
 
 EuclideanSheaf{T}(vertex_stalks::Vector{Int}) where T = EuclideanSheaf{T}(vertex_stalks, Dict{UnorderedPair{Int},Int}(), Graph(length(vertex_stalks)), Dict{Pair{Int},Matrix{T}}())
+
+
+function sheaf_from_graph(g::Graph, stalk_dim::Int, rm_generator::Function)
+    n = nv(g)
+    s = EuclideanSheaf{Float64}(repeat([stalk_dim], n))
+
+    for e in edges(g)
+        i, j = src(e), dst(e)
+        rm1 = rm_generator(stalk_dim)
+        rm2 = rm_generator(stalk_dim)
+        add_sheaf_edge!(s, i, j, rm1, rm2)
+    end
+    return s
+end
 
 function vertex_stalks(s::EuclideanSheaf)
     return s.vertex_stalks
@@ -129,6 +144,30 @@ end
 function sheaf_laplacian_matrix(s::EuclideanSheaf)
     B = coboundary_map(s)
     return B' * B
+end
+
+
+function energy_function(L::AbstractMatrix)
+    return x -> 0.5 * x' * (L * x)
+end
+
+function energy_function(s::EuclideanSheaf)
+    return energy_function(sheaf_laplacian_matrix(s))
+end
+
+function nearest_global_section(s::EuclideanSheaf, x; verbose=false)
+    d = coboundary_map(s)
+
+    eL = LinearOperator(d) * LinearOperator(d')
+
+    b = d * x
+
+    y, stats = cg(eL, Array(b))
+    if verbose
+        println(stats)
+    end
+
+    return BlockArray(x - d' * y, s.vertex_stalks)
 end
 
 
