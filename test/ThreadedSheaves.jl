@@ -15,49 +15,10 @@ orthogonal_random_map(n, p=nothing) = Matrix(qr(randn(n, n)).Q)
 sparse_random_map(n, p) = sprand(n, n, p)
 
 
-Random.seed!(42)
-# Parameters
-N = 12
-d = 4
-max_communication_delay = 10
-num_iters = 10000
 
-# Generate a 4-regular random graph on 12 nodes
-g = random_regular_graph(N, 4)
-
-# Construct random threaded sheaf with random 4x4 restriction maps
-nodes = random_async_threaded_sheaf(
-    g, d;
-    max_communication_delay=max_communication_delay,
-    map_generator=dense_random_map
-)
-
-# Calculate step size
-K = lipschitz_constant(nodes)
-step_size = 1 / K
-
-# Initialize nodes
-random_initialization(nodes)
-nodes_sync = deepcopy(nodes)
-
-for n in nodes_sync
-    n.period = 1
-    n.phase = 0
-end
-
-# Run iterations
-loss = iterate_laplacian!(nodes, step_size, num_iters)
-loss_sync = iterate_laplacian!(nodes_sync, step_size, num_iters)
-
-# Plot results
-iters = 1:length(loss)
-plot(iters, loss, yscale=:log10, label="Async Sheaf 1/K Step")
-plot!(iters, loss_sync, yscale=:log10, label="Sync Sheaf 1/K Step")
-xlabel!("Iteration")
-ylabel!("Loss")
-title!("Loss vs Iteration for 4-Regular Graph, Random 4x4 Maps")
-
-
+# Add some documentation:
+# Test convergence of async threaded sheaf laplacian iteration with various max delays (B)
+# We expect that as B increases, the convergence will be slower
 
 Random.seed!(42)
 N = 12
@@ -66,7 +27,7 @@ num_iters = 100000
 
 # Generate a 4-regular random graph on 12 nodes
 g = random_regular_graph(N, 4)
-delays = [1, 5, 10, 100, 500]
+delays = [1, 5, 10, 100, 500, 1000]
 losses = []
 
 for B in delays
@@ -120,8 +81,6 @@ ThreadedSheaves.coboundary_map(nodes_id)
 # Calculate step sizes
 K = lipschitz_constant(nodes_id)
 step_size = Float64(.99 * (2 / (K * (1 + 2 * sqrt(n) * B))))
-
-
 
 
 
