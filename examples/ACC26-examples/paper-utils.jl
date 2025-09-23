@@ -1,6 +1,7 @@
 using AlgebraicOptimization
 using BlockArrays
 using Plots
+gr()
 default(fontfamily="Computer Modern")
 using CSV
 using Tables
@@ -143,9 +144,9 @@ function load_trajectory(trajectory_file)
     return CSV.File(trajectory_file) |> CSV.Tables.matrix
 end
 
-function empty_experiment_plot(title; x_label="Iteration", y_label="Energy")
-    plt = plot()
-    plot!(plt, title=title, xlabel=x_label, ylabel=y_label, thickness_scaling=1.5, legend=:bottomright)
+function empty_experiment_plot(x_label, y_label)
+    plt = plot(yformatter=:plain, xformatter=:plain)
+    plot!(plt, title="", xlabel=x_label, ylabel=y_label, thickness_scaling=1.5)
     return plt
 end
 

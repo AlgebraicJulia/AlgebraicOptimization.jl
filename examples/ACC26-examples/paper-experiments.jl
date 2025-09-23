@@ -5,7 +5,7 @@ using Graphs
 using LinearAlgebra
 include("paper-utils.jl")
 
-Random.seed!(1234)
+Random.seed!(69)
 
 # Convergence vs. delay experiment
 function generate_convergence_trajectories(file_path::String)
@@ -41,10 +41,11 @@ function generate_convergence_trajectories(file_path::String)
 
         # Postprocess for error
         x_star = traj[end]
-        error(x) = norm(x - x_star)
-        errors = error.(traj)
-        # Truncate beyond error=0
-        idx = findfirst(iszero, errors)
+        error(x) = norm(x - x_star) / norm(x_star)
+        errors = error.(traj[1:end-1])
+        #errors .+= 1e-12
+        # Truncate beyond error=1e-6
+        idx = findfirst(e -> e < 1e-6, errors)
         if !isnothing(idx)
             errors = errors[1:idx-1]
         end
@@ -52,20 +53,20 @@ function generate_convergence_trajectories(file_path::String)
         save_trajectory(file_path * "error$i.csv", errors)
 
         # Postprocess for orthog_projection
-        projection_error(x) = norm(x - x_orthog)
+        #=projection_error(x) = norm(x - x_orthog)
         projection_errors = projection_error.(traj)
         # Truncate beyond error=0
-        idx = findfirst(iszero, projection_errors)
+        #=idx = findfirst(iszero, projection_errors)
         if !isnothing(idx)
             projection_errors = projection_errors[1:idx-1]
-        end
+        end=#
 
-        save_trajectory(file_path * "proj_error$i.csv", projection_errors)
+        save_trajectory(file_path * "proj_error$i.csv", projection_errors)=#
     end
 end
 
 function plot_convergence_losses(file_path::String)
-    plt = empty_experiment_plot("")
+    plt = empty_experiment_plot("Iteration", "Energy")
 
     Bs = [1, 50, 100, 500, 1000]
     for (i, B) in enumerate(Bs)
@@ -81,7 +82,7 @@ function plot_convergence_losses(file_path::String)
 end
 
 function plot_convergence_errors(file_path::String)
-    plt = empty_experiment_plot(""; y_label="Error")
+    plt = empty_experiment_plot("Iteration", "Error")
     Bs = Bs = [1, 50, 100, 500, 1000]
     for (i, B) in enumerate(Bs)
         loss = load_trajectory(file_path * "error$i.csv")
@@ -117,8 +118,10 @@ function plot_convergence_projection_errors(file_path::String)
 end
 
 function convergence_vs_delay_plot(file_path::String)
-
-
+    p1 = plot_convergence_losses(file_path)
+    p2 = plot_convergence_errors(file_path)
+    l = @layout [a; b]
+    plot(p1, p2, layout=l)
 end
 
 # Convergence from many initializations experiment
