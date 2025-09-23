@@ -52,15 +52,20 @@ end
 EuclideanSheaf{T}(vertex_stalks::Vector{Int}) where T = EuclideanSheaf{T}(vertex_stalks, Dict{UnorderedPair{Int},Int}(), Graph(length(vertex_stalks)), Dict{Pair{Int},Matrix{T}}())
 
 
-function sheaf_from_graph(g::Graph, stalk_dim::Int, rm_generator::Function)
+function sheaf_from_graph(g::Graph, stalk_dim::Int, rm_generator::Function; symmetric_edges=false)
     n = nv(g)
     s = EuclideanSheaf{Float64}(repeat([stalk_dim], n))
 
     for e in edges(g)
         i, j = src(e), dst(e)
-        rm1 = rm_generator(stalk_dim)
-        rm2 = rm_generator(stalk_dim)
-        add_sheaf_edge!(s, i, j, rm1, rm2)
+        if symmetric_edges
+            rm = rm_generator(stalk_dim)
+            add_sheaf_edge!(s, i, j, rm, rm)
+        else
+            rm1 = rm_generator(stalk_dim)
+            rm2 = rm_generator(stalk_dim)
+            add_sheaf_edge!(s, i, j, rm1, rm2)
+        end
     end
     return s
 end

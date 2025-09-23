@@ -17,6 +17,43 @@ const purple = rgb(216, 150, 238)
 const beige = rgb(250, 200, 203)
 
 colors = [blue, orange, green, purple, beige]
+
+
+function random_psd(dim)
+    A = rand(ceil(Int64, dim / 2), dim)
+    return A' * A
+end
+
+function random_pd(dim)
+    A = rand(ceil(Int64, dim / 2), dim)
+    return A' * A + I(dim)
+end
+
+function matrix_weighted_rm(A)
+    _, U = qr(A)
+    return U
+end
+
+function matrix_weighted_edge_generator(; pd_prob=0.5)
+    return stalk_dim -> begin
+        if rand() < pd_prob
+            A = random_pd(stalk_dim)
+            return matrix_weighted_rm(A)
+        else
+            A = random_psd(stalk_dim)
+            return matrix_weighted_rm(A)
+        end
+    end
+end
+
+
+function random_semi_orthogonal_matrix(n, m)
+    N = max(n, m)
+    A = rand(N, N)
+    Q, _ = qr(A)
+    return Q[1:n, 1:m]
+end
+
 # Trajectory Computation Utils
 
 function compute_trajectory(L, x0, γ; max_iters=1000, tol=1e-8)
@@ -89,12 +126,24 @@ function compute_trajectory_asynch(L, x0, γ, nblocks, block_size, update_model:
     update_mixture = MixtureModel(update_model.dists, update_model.weights)
 
     update_periods = ceil.(Int, rand(update_mixture, nblocks))
+    # clamp to be in the range of 1:B
+    update_periods = [p > B ? B : p for p in update_periods]
+    update_periods = [p < 1 ? 0 : p for p in update_periods]
     update_phases = [rand(0:update_periods[i]-1) for i in 1:nblocks]
+
+    println(update_periods)
+    println(update_phases)
 
     broadcast_mixture = MixtureModel(broadcast_model.dists, broadcast_model.weights)
 
     broadcast_periods = ceil.(Int, rand(broadcast_mixture, nblocks))
+    # clamp to be in the range of 1:B
+    broadcast_periods = [p > B ? B : p for p in broadcast_periods]
+    broadcast_periods = [p < 1 ? 0 : p for p in broadcast_periods]
     broadcast_phases = [rand(0:broadcast_periods[i]-1) for i in 1:nblocks]
+
+    println(broadcast_periods)
+    println(broadcast_phases)
 
     traj = [x0]
 
@@ -105,6 +154,7 @@ function compute_trajectory_asynch(L, x0, γ, nblocks, block_size, update_model:
             if t % update_periods[i] == update_phases[i]
                 # update local state
                 local_states[Block(i), Block(i)] -= γ * g[Block(i), Block(i)]
+                #local_states[Block(i), Block(i)] ./= norm(local_states[Block(i), Block(i)])
                 # update global state
                 global_state[Block(i)] = local_states[Block(i), Block(i)][:]
                 # Resample your phase
@@ -144,17 +194,17 @@ function load_trajectory(trajectory_file)
     return CSV.File(trajectory_file) |> CSV.Tables.matrix
 end
 
-function empty_experiment_plot(x_label, y_label)
-    plt = plot(yformatter=:plain, xformatter=:plain)
+function empty_experiment_plot(x_label, y_label; kwargs...)
+    plt = plot(yformatter=:plain, xformatter=:plain; kwargs...)
     plot!(plt, title="", xlabel=x_label, ylabel=y_label, thickness_scaling=1.5)
     return plt
 end
 
-function plot_log_loss_curve!(plt, losses, label, color)
-    plot!(plt, yscale=:log10, losses, label=label, linewidth=2) #=color=color,=#
+function plot_log_loss_curve!(plt, losses, label; kwargs...)
+    plot!(plt, yscale=:log10, losses, label=label, linewidth=2; kwargs...) #=color=color,=#
 end
 
-function plot_loss_curve!(plt, losses, label, color)
-    plot!(plt, losses, label=label, linewidth=2) #=color=color,=#
+function plot_loss_curve!(plt, losses, label; kwargs...)
+    plot!(plt, losses, label=label, linewidth=2; kwargs...) #=color=color,=#
 end
 
