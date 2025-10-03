@@ -70,6 +70,19 @@ function sheaf_from_graph(g::Graph, stalk_dim::Int, rm_generator::Function; symm
     return s
 end
 
+function sheaf_from_graph(g::Graph, stalk_dim::Int, rm1_generator::Function, rm2_generator::Function)
+    n = nv(g)
+    s = EuclideanSheaf{Float64}(repeat([stalk_dim], n))
+
+    for e in edges(g)
+        i, j = src(e), dst(e)
+        rm1 = rm1_generator(stalk_dim)
+        rm2 = rm2_generator(stalk_dim)
+        add_sheaf_edge!(s, i, j, rm1, rm2)
+    end
+    return s
+end
+
 function vertex_stalks(s::EuclideanSheaf)
     return s.vertex_stalks
 end
