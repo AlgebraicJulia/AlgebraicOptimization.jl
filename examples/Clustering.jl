@@ -35,3 +35,18 @@ clusters = compute_clusters(g, 4)
 loss = iterate_laplacian!(nodes, 10000, clusters)
 
 plot(loss)
+
+
+# GR plotting backend sometimes fails to precompile due to missing LERC_jll dependency
+# The following code can be used to fix this issue manually
+
+# using Pkg
+# # skip activation of a temp environment if you are trying to fix your environment
+# Pkg.activate(; temp=true)
+# # Add LERC_jll version 3
+# Pkg.add([
+#     PackageSpec(name="GR"),
+#     PackageSpec(name="LERC_jll", version="3")
+# ])
+# # Force GR to precompile
+# Base.compilecache(Base.PkgId(Base.UUID("28b8d3ca-fb5f-59d9-8090-bfdbd6d07a71"), "GR"))
