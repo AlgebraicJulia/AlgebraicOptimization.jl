@@ -14,6 +14,7 @@ include("Parser.jl")
 
 @reexport using .MPC
 @reexport using .CellularSheaves
+@reexport using .BlockSparseArrays
 #@reexport using .SheafNodes
 #@reexport using .DistributedSheaves
 #@reexport using .ThreadedSheaves

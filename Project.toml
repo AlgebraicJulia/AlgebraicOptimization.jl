@@ -1,14 +1,15 @@
 name = "AlgebraicOptimization"
 uuid = "a72ceada-00ec-4ad9-90d3-37b40eaed052"
 license = "MIT"
-authors = ["Tyler Hanks <teh.hanks@gmail.com>"]
 version = "0.0.1"
+authors = ["Tyler Hanks <teh.hanks@gmail.com>"]
 
 [deps]
 ArgCheck = "dce04be8-c92d-5529-be00-80e4d2c0e197"
 AutoHashEquals = "15f4f7f2-30c1-5605-9d31-71845cf9641f"
 BlockArrays = "8e7c35d0-a365-5155-bbbb-fb81a777f24e"
 Catlab = "134e5e36-593f-5add-ad60-77f754baafbe"
+CliqueTrees = "60701a23-6482-424a-84db-faee86b9b1f8"
 Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 Graphs = "86223c79-3864-5bf0-83f7-82e725a168b6"
@@ -34,6 +35,7 @@ ArgCheck = "2.5.0"
 AutoHashEquals = "2.2.0"
 BlockArrays = "1"
 Catlab = "0.16.10"
+CliqueTrees = "1.15.3"
 ForwardDiff = "0.10.36, 1"
 Graphs = "1.12.0"
 Ipopt = "1.7.2"
