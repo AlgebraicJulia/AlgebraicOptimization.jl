@@ -25,9 +25,11 @@ println("  Baseline:    ", round(err(base),  sigdigits=4), " m")
 println("  Coordinated: ", round(err(coord), sigdigits=4), " m")
 
 println("\nSaving plots...")
-savefig(compare_runs(base, coord, D, b), "examples/quadrotor-lqr/figures/comparison.png")
-savefig(plot_trajectories(coord),        "examples/quadrotor-lqr/figures/trajectories.png")
-savefig(plot_formation_error(coord, D, b), "examples/quadrotor-lqr/figures/formation_error.png")
-savefig(plot_motor_commands(coord[1], 1),  "examples/quadrotor-lqr/figures/motor_commands_agent1.png")
+fp = "examples/quadrotor-lqr/figures/"
+isdir(fp) || mkdir(fp) # check if fp exists, and create it if not
+savefig(compare_runs(base, coord, D, b), fp * "comparison.png")
+savefig(plot_trajectories(coord),        fp * "trajectories.png")
+savefig(plot_formation_error(coord, D, b), fp * "formation_error.png")
+savefig(plot_motor_commands(coord[1], 1),  fp * "motor_commands_agent1.png")
 
-println("Done. Plots written to examples/quadrotor-lqr/figures/ directory.")
+println("Done. Plots written to " * fp * " directory.")
