@@ -184,8 +184,7 @@ end
 Cascade control law u = -K(x - x_ref), then mixer inversion M·ω² = U.
 Position loop sets attitude corrections; attitude loop sets torques.
 """
-function compute_control(ctrl::LQRController,
-                         x::AbstractVector, x_ref::AbstractVector)
+function compute_control(ctrl::LQRController, x::AbstractVector, x_ref::AbstractVector)
     p = ctrl.params
 
     e_pos = x[[1,2,4,5]] - x_ref[[1,2,4,5]]
@@ -194,8 +193,8 @@ function compute_control(ctrl::LQRController,
     φθ_cmd = -ctrl.K_pos * e_pos
     δU1 = (-ctrl.K_z * e_z)[1]
 
-    att_ref = copy(x_ref[7:12])
-    att_ref[1:2] .+= φθ_cmd
+    att_ref = [x_ref[7] + φθ_cmd[1], x_ref[8] + φθ_cmd[2], x_ref[9],
+               x_ref[10], x_ref[11], x_ref[12]]
     U_att = -ctrl.K_att * (x[7:12] - att_ref)
 
     U1 = p.m * p.g + δU1
@@ -215,80 +214,97 @@ end
 """
     PIDController
 
-Diagonal cascaded PD/PID controller. Gains are extracted from the LQR solution
-for each decoupled subsystem (dropping MIMO cross-coupling) so the PID has the
-best possible single-channel tuning while still being structurally simpler than LQR.
+Cascaded PID tuned via `loopshapingPID` (ControlSystems.jl), independently of LQR.
+Each channel is a SISO loop over its double-integrator plant P(s) = gain/s².
+Gains target a specified crossover frequency with default Mt/ϕt margins,
+which are appropriate for double-integrator (inertial) plants.
 """
 mutable struct PIDController
-    Kp_pos::Vector{Float64} # [x-channel, y-channel]
+    Kp_pos::Vector{Float64} # [x, y]
+    Ki_pos::Vector{Float64}
     Kd_pos::Vector{Float64}
     Kp_z::Float64
     Ki_z::Float64
     Kd_z::Float64
     Kp_att::Vector{Float64} # [φ, θ, ψ]
+    Ki_att::Vector{Float64}
     Kd_att::Vector{Float64}
-    e_int_z::Float64        # altitude integrator state
+    e_int_pos::Vector{Float64}
+    e_int_z::Float64
+    e_int_att::Vector{Float64}
     dt::Float64
     params::QuadrotorParams
 end
 
 function PIDController(
     p::QuadrotorParams = DEFAULT_PARAMS;
-    Q_pos::AbstractMatrix = Diagonal([0.1, 0.1, 0.001, 0.001]),
-    R_pos::AbstractMatrix = Diagonal([1.0, 1.0]),
-    Q_att::AbstractMatrix = Diagonal([20.0, 17.0, 0.15, 0.05, 0.05, 0.09]),
-    R_att::AbstractMatrix = Diagonal([1.0, 1.0, 1.0]),
-    Q_z::AbstractMatrix = Diagonal([0.03, 0.05]),
-    R_z::AbstractMatrix = Diagonal([0.0002]),
-    Ki_z::Float64 = 0.0,
+    ω_att::Float64 = 10.0,  # attitude loop crossover frequency (rad/s)
+    ω_pos::Float64 = 1.5,   # position loop crossover frequency (rad/s)
+    ω_z::Float64 = 2.0,     # altitude loop crossover frequency (rad/s)
     dt::Float64 = 1e-3,
 )
-    A_pos, B_pos, A_att, B_att, A_z, B_z = linearize_hover(p)
-    K_pos = lqr(A_pos, B_pos, Matrix(Q_pos), Matrix(R_pos))
-    K_att = lqr(A_att, B_att, Matrix(Q_att), Matrix(R_att))
-    K_z = lqr(A_z, B_z, Matrix(Q_z), Matrix(R_z))
+    g, m, l = p.g, p.m, p.l
+    Ix, Iy, Iz = p.Ix, p.Iy, p.Iz
 
-    # B_pos[:,1] = φ_cmd → ẏ;  B_pos[:,2] = θ_cmd → ẋ
-    # K_pos row 1 → φ_cmd (controls y);  row 2 → θ_cmd (controls x)
-    Kp_pos = [K_pos[2, 1], K_pos[1, 2]]
-    Kd_pos = [K_pos[2, 3], K_pos[1, 4]]
+    # Each channel is a decoupled double integrator at hover: P(s) = gain/s²
+    P_pos = tf(g, [1.0, 0.0, 0.0])
+    P_z = tf(1/m, [1.0, 0.0, 0.0])
+    P_φ = tf(l/Ix, [1.0, 0.0, 0.0])
+    P_θ = tf(l/Iy, [1.0, 0.0, 0.0])
+    P_ψ = tf(1/Iz, [1.0, 0.0, 0.0])
 
-    # K_att rows: [U₂, U₃, U₄];  cols: [φ, θ, ψ, p, q, r]
-    Kp_att = [K_att[1, 1], K_att[2, 2], K_att[3, 3]]
-    Kd_att = [K_att[1, 4], K_att[2, 5], K_att[3, 6]]
+    # loopshapingPID returns parallel-form gains (Kp + Ki/s + Kd·s) tuned to
+    # hit the target crossover with adequate phase margin.
+    _, kp_pos, ki_pos, kd_pos, _, _ = loopshapingPID(P_pos, ω_pos; doplot=false, form=:parallel)
+    _, kp_z, ki_z, kd_z, _, _ = loopshapingPID(P_z, ω_z; doplot=false, form=:parallel)
+    _, kp_φ, ki_φ, kd_φ, _, _ = loopshapingPID(P_φ, ω_att; doplot=false, form=:parallel)
+    _, kp_θ, ki_θ, kd_θ, _, _ = loopshapingPID(P_θ, ω_att; doplot=false, form=:parallel)
+    _, kp_ψ, ki_ψ, kd_ψ, _, _ = loopshapingPID(P_ψ, ω_att * 0.3; doplot=false, form=:parallel)
 
-    return PIDController(Kp_pos, Kd_pos, K_z[1, 1], Ki_z, K_z[1, 2], Kp_att, Kd_att, 0.0, dt, p)
+    # x and y share the same plant so they get the same gains
+    return PIDController(
+        [kp_pos, kp_pos], [ki_pos, ki_pos], [kd_pos, kd_pos],
+        kp_z, ki_z, kd_z,
+        [kp_φ, kp_θ, kp_ψ], [ki_φ, ki_θ, ki_ψ], [kd_φ, kd_θ, kd_ψ],
+        zeros(2), 0.0, zeros(3),
+        dt, p,
+    )
 end
 
 """
     compute_control(ctrl::PIDController, x, x_ref) -> (ω², U)
 
-Diagonal cascaded PD control. Uses state velocities/rates directly (no finite
-differences). Position loop outputs angle commands fed into the attitude loop.
+Cascaded PID control law. State velocities and rates are used directly as the
+derivative term. Position loop outputs angle commands which are added to the
+attitude reference before the attitude loop runs.
 """
-function compute_control(ctrl::PIDController,
-                         x::AbstractVector, x_ref::AbstractVector)
+function compute_control(ctrl::PIDController, x::AbstractVector, x_ref::AbstractVector)
     p = ctrl.params
+    dt = ctrl.dt
 
-    # Position PD (ẋ, ẏ are states 4, 5)
-    e_x = x[1] - x_ref[1];  ė_x = x[4] - x_ref[4]
-    e_y = x[2] - x_ref[2];  ė_y = x[5] - x_ref[5]
-    θ_cmd = -(ctrl.Kp_pos[1] * e_x + ctrl.Kd_pos[1] * ė_x)
-    φ_cmd = -(ctrl.Kp_pos[2] * e_y + ctrl.Kd_pos[2] * ė_y)
+    # Position PID — ẋ, ẏ are states 4, 5
+    e_x = x[1] - x_ref[1]
+    e_y = x[2] - x_ref[2]
+    ė_x = x[4] - x_ref[4]
+    ė_y = x[5] - x_ref[5]
+    ctrl.e_int_pos .+= [e_x, e_y] * dt
+    θ_cmd = -(ctrl.Kp_pos[1]*e_x + ctrl.Ki_pos[1]*ctrl.e_int_pos[1] + ctrl.Kd_pos[1]*ė_x)
+    φ_cmd = -(ctrl.Kp_pos[2]*e_y + ctrl.Ki_pos[2]*ctrl.e_int_pos[2] + ctrl.Kd_pos[2]*ė_y)
 
-    # Altitude PID (ż is state 6)
-    e_z = x[3] - x_ref[3];  ė_z = x[6] - x_ref[6]
-    ctrl.e_int_z += e_z * ctrl.dt
-    δU1 = -(ctrl.Kp_z * e_z + ctrl.Ki_z * ctrl.e_int_z + ctrl.Kd_z * ė_z)
+    # Altitude PID — ż is state 6
+    e_z = x[3] - x_ref[3]
+    ė_z = x[6] - x_ref[6]
+    ctrl.e_int_z += e_z * dt
+    δU1 = -(ctrl.Kp_z*e_z + ctrl.Ki_z*ctrl.e_int_z + ctrl.Kd_z*ė_z)
 
-    # Attitude PD (rates p, q, r are states 10, 11, 12)
-    att_ref = copy(x_ref[7:12])
-    att_ref[1:2] .+= [φ_cmd, θ_cmd]
-    e_ang  = x[7:9] - att_ref[1:3]
-    e_rate = x[10:12] - att_ref[4:6]
-    U2 = -(ctrl.Kp_att[1] * e_ang[1] + ctrl.Kd_att[1] * e_rate[1])
-    U3 = -(ctrl.Kp_att[2] * e_ang[2] + ctrl.Kd_att[2] * e_rate[2])
-    U4 = -(ctrl.Kp_att[3] * e_ang[3] + ctrl.Kd_att[3] * e_rate[3])
+    # Attitude PID — angle commands from position loop added to attitude reference
+    # rates p, q, r are states 10, 11, 12
+    e_ang = x[7:9] - [x_ref[7] + φ_cmd, x_ref[8] + θ_cmd, x_ref[9]]
+    e_rate = x[10:12] - x_ref[10:12]
+    ctrl.e_int_att .+= e_ang * dt
+    U2 = -(ctrl.Kp_att[1]*e_ang[1] + ctrl.Ki_att[1]*ctrl.e_int_att[1] + ctrl.Kd_att[1]*e_rate[1])
+    U3 = -(ctrl.Kp_att[2]*e_ang[2] + ctrl.Ki_att[2]*ctrl.e_int_att[2] + ctrl.Kd_att[2]*e_rate[2])
+    U4 = -(ctrl.Kp_att[3]*e_ang[3] + ctrl.Ki_att[3]*ctrl.e_int_att[3] + ctrl.Kd_att[3]*e_rate[3])
 
     U1 = p.m * p.g + δU1
 
