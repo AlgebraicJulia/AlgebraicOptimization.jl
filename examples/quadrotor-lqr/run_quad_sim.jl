@@ -1,35 +1,36 @@
 using AlgebraicOptimization
 using Plots
 using LinearAlgebra
+using Dates
 
-edges   = [(1,2), (2,3)]
-offsets = Dict((1,2) => [2.0, 0.0, 0.0],
-               (2,3) => [2.0, 0.0, 0.0])
+edges   = [(1, 2), (2, 3)]
+offsets = Dict((1, 2) => [2.0, 0.0, 0.0],
+               (2, 3) => [2.0, 0.0, 0.0])
 
-x0s       = [zeros(12) for _ in 1:3]
-waypoints = [vcat([0.0, 0.0, 2.0], zeros(9)),
-             vcat([2.0, 0.0, 2.0], zeros(9)),
-             vcat([4.0, 0.0, 2.0], zeros(9))]
-
+x0s = [zeros(12) for _ in 1:3]
 D, b = formation_coboundary(3, edges, offsets)
 
-println("Running baseline simulation...")
-base = run_baseline_sim(waypoints; x0s=x0s, t_end=10.0)
+println("Running coordinated LQR simulation...")
+lqr_runs = run_coordinated_sim(3, edges, offsets; ctrl=LQRController(), x0s=x0s, t_end=10.0)
 
-println("Running coordinated simulation...")
-coord = run_coordinated_sim(3, edges, offsets; x0s=x0s, t_end=10.0)
+println("Running coordinated PID simulation...")
+pid_runs = run_coordinated_sim(3, edges, offsets; ctrl=PIDController(), x0s=x0s, t_end=10.0)
 
 err(recs) = norm(D * vcat([recs[i].x[1:3, end] for i in 1:3]...) - b)
 println("\nFormation error at t = 10 s:")
-println("  Baseline:    ", round(err(base),  sigdigits=4), " m")
-println("  Coordinated: ", round(err(coord), sigdigits=4), " m")
+println("  LQR: ", round(err(lqr_runs), sigdigits=4), " m")
+println("  PID: ", round(err(pid_runs), sigdigits=4), " m")
 
 println("\nSaving plots...")
 fp = "examples/quadrotor-lqr/figures/"
-isdir(fp) || mkdir(fp) # check if fp exists, and create it if not
-savefig(compare_runs(base, coord, D, b), fp * "comparison.png")
-savefig(plot_trajectories(coord),        fp * "trajectories.png")
-savefig(plot_formation_error(coord, D, b), fp * "formation_error.png")
-savefig(plot_motor_commands(coord[1], 1),  fp * "motor_commands_agent1.png")
+isdir(fp) || mkdir(fp)
+date = Dates.format(now(), "yyyy-mm-dd_HH-MM-SS")
 
-println("Done. Plots written to " * fp * " directory.")
+savefig(compare_runs(pid_runs, lqr_runs, D, b; title="Coordinated PID vs. Coordinated LQR", label1="PID", label2="LQR"), fp * "comparison_" * date * ".png")
+savefig(plot_trajectories(lqr_runs; title="LQR trajectories"), fp * "trajectories_lqr_" * date * ".png")
+savefig(plot_trajectories(pid_runs; title="PID trajectories"), fp * "trajectories_pid_" * date * ".png")
+savefig(plot_formation_error(lqr_runs, D, b; title="LQR formation error"), fp * "formation_error_lqr_" * date * ".png")
+savefig(plot_formation_error(pid_runs, D, b; title="PID formation error"), fp * "formation_error_pid_" * date * ".png")
+savefig(plot_motor_commands(lqr_runs[1], 1), fp * "motor_commands_agent1_" * date * ".png")
+
+println("Done. Plots written to " * fp)

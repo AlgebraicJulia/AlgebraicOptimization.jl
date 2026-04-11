@@ -106,10 +106,10 @@ using ControlSystems
         @test U_high[1] < p.m * p.g           # reduce thrust to descend
     end
 
-    # ── SheafLQRInterface ────────────────────────────────────────────────────
-    @testset "SheafLQRInterface" begin
+    # ── SheafControllerInterface ─────────────────────────────────────────────
+    @testset "SheafControllerInterface" begin
         ctrl  = LQRController(p)
-        iface = SheafLQRInterface(ctrl; planner_hz=10.0)
+        iface = SheafControllerInterface(ctrl; planner_hz=10.0)
 
         x0, _ = hover_equilibrium(p)
 

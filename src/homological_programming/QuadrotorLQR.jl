@@ -8,7 +8,8 @@ using ..CellularSheaves
 export QuadrotorParams, DEFAULT_PARAMS
 export hover_equilibrium, linearize_hover, assemble_full_plant
 export LQRController
-export compute_control, SheafLQRInterface, update_reference!, step!
+export compute_control, SheafControllerInterface, update_reference!, step!
+export PIDController
 export formation_coboundary, SwarmCoordinator, sheaf_plan_step!, swarm_step!
 export SimRecord, run_baseline_sim, run_coordinated_sim
 export plot_trajectories, plot_formation_error, plot_motor_commands, compare_runs
@@ -212,23 +213,114 @@ function compute_control(ctrl::LQRController,
 end
 
 """
-    SheafLQRInterface
+    PIDController
+
+Diagonal cascaded PD/PID controller. Gains are extracted from the LQR solution
+for each decoupled subsystem (dropping MIMO cross-coupling) so the PID has the
+best possible single-channel tuning while still being structurally simpler than LQR.
+"""
+mutable struct PIDController
+    Kp_pos::Vector{Float64} # [x-channel, y-channel]
+    Kd_pos::Vector{Float64}
+    Kp_z::Float64
+    Ki_z::Float64
+    Kd_z::Float64
+    Kp_att::Vector{Float64} # [φ, θ, ψ]
+    Kd_att::Vector{Float64}
+    e_int_z::Float64        # altitude integrator state
+    dt::Float64
+    params::QuadrotorParams
+end
+
+function PIDController(
+    p::QuadrotorParams = DEFAULT_PARAMS;
+    Q_pos::AbstractMatrix = Diagonal([0.1, 0.1, 0.001, 0.001]),
+    R_pos::AbstractMatrix = Diagonal([1.0, 1.0]),
+    Q_att::AbstractMatrix = Diagonal([20.0, 17.0, 0.15, 0.05, 0.05, 0.09]),
+    R_att::AbstractMatrix = Diagonal([1.0, 1.0, 1.0]),
+    Q_z::AbstractMatrix = Diagonal([0.03, 0.05]),
+    R_z::AbstractMatrix = Diagonal([0.0002]),
+    Ki_z::Float64 = 0.0,
+    dt::Float64 = 1e-3,
+)
+    A_pos, B_pos, A_att, B_att, A_z, B_z = linearize_hover(p)
+    K_pos = lqr(A_pos, B_pos, Matrix(Q_pos), Matrix(R_pos))
+    K_att = lqr(A_att, B_att, Matrix(Q_att), Matrix(R_att))
+    K_z = lqr(A_z, B_z, Matrix(Q_z), Matrix(R_z))
+
+    # B_pos[:,1] = φ_cmd → ẏ;  B_pos[:,2] = θ_cmd → ẋ
+    # K_pos row 1 → φ_cmd (controls y);  row 2 → θ_cmd (controls x)
+    Kp_pos = [K_pos[2, 1], K_pos[1, 2]]
+    Kd_pos = [K_pos[2, 3], K_pos[1, 4]]
+
+    # K_att rows: [U₂, U₃, U₄];  cols: [φ, θ, ψ, p, q, r]
+    Kp_att = [K_att[1, 1], K_att[2, 2], K_att[3, 3]]
+    Kd_att = [K_att[1, 4], K_att[2, 5], K_att[3, 6]]
+
+    return PIDController(Kp_pos, Kd_pos, K_z[1, 1], Ki_z, K_z[1, 2], Kp_att, Kd_att, 0.0, dt, p)
+end
+
+"""
+    compute_control(ctrl::PIDController, x, x_ref) -> (ω², U)
+
+Diagonal cascaded PD control. Uses state velocities/rates directly (no finite
+differences). Position loop outputs angle commands fed into the attitude loop.
+"""
+function compute_control(ctrl::PIDController,
+                         x::AbstractVector, x_ref::AbstractVector)
+    p = ctrl.params
+
+    # Position PD (ẋ, ẏ are states 4, 5)
+    e_x = x[1] - x_ref[1];  ė_x = x[4] - x_ref[4]
+    e_y = x[2] - x_ref[2];  ė_y = x[5] - x_ref[5]
+    θ_cmd = -(ctrl.Kp_pos[1] * e_x + ctrl.Kd_pos[1] * ė_x)
+    φ_cmd = -(ctrl.Kp_pos[2] * e_y + ctrl.Kd_pos[2] * ė_y)
+
+    # Altitude PID (ż is state 6)
+    e_z = x[3] - x_ref[3];  ė_z = x[6] - x_ref[6]
+    ctrl.e_int_z += e_z * ctrl.dt
+    δU1 = -(ctrl.Kp_z * e_z + ctrl.Ki_z * ctrl.e_int_z + ctrl.Kd_z * ė_z)
+
+    # Attitude PD (rates p, q, r are states 10, 11, 12)
+    att_ref = copy(x_ref[7:12])
+    att_ref[1:2] .+= [φ_cmd, θ_cmd]
+    e_ang  = x[7:9] - att_ref[1:3]
+    e_rate = x[10:12] - att_ref[4:6]
+    U2 = -(ctrl.Kp_att[1] * e_ang[1] + ctrl.Kd_att[1] * e_rate[1])
+    U3 = -(ctrl.Kp_att[2] * e_ang[2] + ctrl.Kd_att[2] * e_rate[2])
+    U4 = -(ctrl.Kp_att[3] * e_ang[3] + ctrl.Kd_att[3] * e_rate[3])
+
+    U1 = p.m * p.g + δU1
+
+    kf, km, l = p.kf, p.km, p.l
+    M = [kf    kf      kf     kf;
+         0.0  -kf*l    0.0    kf*l;
+         kf*l  0.0    -kf*l   0.0;
+        -km    km     -km     km]
+    ω² = M \ [U1; U2; U3; U4]
+
+    return ω², [U1, U2, U3, U4]
+end
+
+"""
+    SheafControllerInterface
 
 Mediates time-scale separation between the slow sheaf planner (≤10 Hz) and
-the fast LQR inner loop (~1 kHz). The planner writes x_ref; the inner loop reads it.
+the fast inner loop (~1 kHz). Controller-agnostic: works with LQRController,
+PIDController, or any type that implements compute_control(ctrl, x, x_ref).
 """
-mutable struct SheafLQRInterface
-    ctrl::LQRController
+mutable struct SheafControllerInterface
+    ctrl  # LQRController, PIDController, or any compatible type
     x_ref::Vector{Float64}
     t_last_plan::Float64
     planner_dt::Float64
 end
 
-function SheafLQRInterface(ctrl::LQRController; planner_hz::Float64 = 10.0)
-    return SheafLQRInterface(ctrl, zeros(12), -Inf, 1.0 / planner_hz)
+function SheafControllerInterface(ctrl; planner_hz::Float64 = 10.0)
+    return SheafControllerInterface(ctrl, zeros(12), -Inf, 1.0 / planner_hz)
 end
 
-function update_reference!(iface::SheafLQRInterface,
+function update_reference!(iface::SheafControllerInterface,
                             x_ref_new::AbstractVector, t_now::Float64)
     @assert length(x_ref_new) == 12 "x_ref must be a 12-element state vector"
     copyto!(iface.x_ref, x_ref_new)
@@ -239,9 +331,9 @@ end
 """
     step!(iface, x) -> (ω², U)
 
-Inner-loop tick (~1 kHz): evaluate u = -K(x - x_ref).
+Inner-loop tick (~1 kHz): evaluate the inner-loop control law.
 """
-function step!(iface::SheafLQRInterface, x::AbstractVector)
+function step!(iface::SheafControllerInterface, x::AbstractVector)
     return compute_control(iface.ctrl, x, iface.x_ref)
 end
 
@@ -287,7 +379,7 @@ fast inner loop (~1 kHz) tracks them via `swarm_step!`.
 mutable struct SwarmCoordinator
     sheaf::CellularSheaf
     b::Vector{Float64}
-    controllers::Vector{SheafLQRInterface}
+    controllers::Vector{SheafControllerInterface}
     n_agents::Int
 end
 
@@ -296,11 +388,12 @@ function SwarmCoordinator(
     edges::Vector{Tuple{Int,Int}},
     offsets::Dict{Tuple{Int,Int}, Vector{Float64}} = Dict{Tuple{Int,Int}, Vector{Float64}}();
     params::QuadrotorParams = DEFAULT_PARAMS,
+    ctrl = LQRController(params),
     planner_hz::Float64 = 10.0,
 )
     sheaf, b = _formation_sheaf(n_agents, edges, offsets)
-    ctrl = LQRController(params)
-    controllers = [SheafLQRInterface(ctrl; planner_hz=planner_hz) for _ in 1:n_agents]
+    controllers = [SheafControllerInterface(deepcopy(ctrl); planner_hz=planner_hz)
+                   for _ in 1:n_agents]
     return SwarmCoordinator(sheaf, b, controllers, n_agents)
 end
 
@@ -372,6 +465,7 @@ Each agent independently tracks its own fixed waypoint with no inter-agent coupl
 function run_baseline_sim(
     waypoints::Vector{<:AbstractVector};
     params::QuadrotorParams = DEFAULT_PARAMS,
+    ctrl = LQRController(params),
     x0s::Vector{<:AbstractVector} = [zeros(12) for _ in eachindex(waypoints)],
     dt::Float64 = 1e-3,
     t_end::Float64 = 10.0,
@@ -381,7 +475,7 @@ function run_baseline_sim(
     n_steps = round(Int, t_end / dt)
 
     A_full, B_full, U_eq = assemble_full_plant(params)
-    ctrl = LQRController(params)
+    agent_ctrls = [deepcopy(ctrl) for _ in 1:n_agents]
 
     records = [SimRecord(
         Vector{Float64}(undef, n_steps),
@@ -398,7 +492,7 @@ function run_baseline_sim(
         for i in 1:n_agents
             x = states[i]
             x_ref = waypoints[i]
-            ω², U = compute_control(ctrl, x, x_ref)
+            ω², U = compute_control(agent_ctrls[i], x, x_ref)
             records[i].t[k] = t_now
             records[i].x[:, k] = x
             records[i].x_ref[:, k] = x_ref
@@ -422,6 +516,7 @@ function run_coordinated_sim(
     edges::Vector{Tuple{Int,Int}},
     offsets::Dict{Tuple{Int,Int}, Vector{Float64}} = Dict{Tuple{Int,Int}, Vector{Float64}}();
     params::QuadrotorParams = DEFAULT_PARAMS,
+    ctrl = LQRController(params),
     x0s::Vector{<:AbstractVector} = [zeros(12) for _ in 1:n_agents],
     dt::Float64 = 1e-3,
     t_end::Float64 = 10.0,
@@ -433,7 +528,7 @@ function run_coordinated_sim(
     A_full, B_full, U_eq = assemble_full_plant(params)
 
     coord = SwarmCoordinator(n_agents, edges, offsets;
-                             params=params, planner_hz=planner_hz)
+                             params=params, ctrl=ctrl, planner_hz=planner_hz)
 
     for i in 1:n_agents
         update_reference!(coord.controllers[i], copy(x0s[i]), 0.0)
@@ -483,7 +578,8 @@ function plot_trajectories(records::Vector{SimRecord};
     cols = palette(:tab10)
     labels = ("x [m]", "y [m]", "z [m]")
 
-    p = plot(layout=(3, 1), size=(800, 600), link=:x, plot_title=title)
+    p = plot(layout=(3, 1), size=(800, 600), link=:x, plot_title=title,
+             left_margin=10Plots.mm, bottom_margin=6Plots.mm)
 
     for (row, (lbl, idx)) in enumerate(zip(labels, (1, 2, 3)))
         for (j, rec) in enumerate(records)
@@ -528,7 +624,8 @@ function plot_formation_error(
                 legend=false,
                 linewidth=2,
                 color=:steelblue,
-                size=(800, 300))
+                size=(800, 300),
+                left_margin=10Plots.mm, bottom_margin=8Plots.mm)
 end
 
 """
@@ -545,20 +642,22 @@ function plot_motor_commands(record::SimRecord, agent_id::Int = 1;
               xlabel="",
               title=title,
               linewidth=1.5,
-              legend=:topright)
+              legend=:topright,
+              left_margin=10Plots.mm)
     p2 = plot(t, record.omega2';
               labels=["ω₁²" "ω₂²" "ω₃²" "ω₄²"],
               ylabel="ω² [rad²/s²]",
               xlabel="t [s]",
               linewidth=1.5,
-              legend=:topright)
+              legend=:topright,
+              left_margin=10Plots.mm, bottom_margin=8Plots.mm)
     return plot(p1, p2; layout=(2, 1), size=(800, 500), link=:x)
 end
 
 """
-    compare_runs(baseline, coordinated, D, b; title) -> Plot
+    compare_runs(run1, run2, D, b; title, label1, label2) -> Plot
 
-2x2 comparison: z-trajectories and formation error for baseline vs. coordinated.
+2x2 comparison: z-trajectories and formation error for two runs.
 """
 function compare_runs(
     baseline::Vector{SimRecord},
@@ -566,6 +665,8 @@ function compare_runs(
     D::Matrix{Float64},
     b::Vector{Float64};
     title::String = "Baseline vs. Sheaf-Coordinated",
+    label1::String = "Baseline",
+    label2::String = "Coordinated",
 )
     t = baseline[1].t
     cols = palette(:tab10)
@@ -576,10 +677,11 @@ function compare_runs(
          for k in eachindex(recs[1].t)]
     end
 
-    pz_base = plot(title="Baseline — z [m]", xlabel="", ylabel="z [m]", legend=:bottomright)
-    pz_coord = plot(title="Coordinated — z [m]", xlabel="", ylabel="z [m]", legend=:bottomright)
-    pe_base = plot(title="Baseline — formation error", xlabel="t [s]", ylabel="‖Dx-b‖ [m]", legend=false, color=:crimson, linewidth=2)
-    pe_coord = plot(title="Coordinated — formation error", xlabel="t [s]", ylabel="‖Dx-b‖ [m]", legend=false, color=:steelblue, linewidth=2)
+    margin = 8Plots.mm
+    pz_base  = plot(title="$label1 — z [m]", xlabel="", ylabel="z [m]", legend=:bottomright, left_margin=margin)
+    pz_coord = plot(title="$label2 — z [m]", xlabel="", ylabel="z [m]", legend=:bottomright, left_margin=margin)
+    pe_base  = plot(title="$label1 — formation error", xlabel="t [s]", ylabel="‖Dx-b‖ [m]", legend=false, color=:crimson, linewidth=2, left_margin=margin, bottom_margin=margin)
+    pe_coord = plot(title="$label2 — formation error", xlabel="t [s]", ylabel="‖Dx-b‖ [m]", legend=false, color=:steelblue, linewidth=2, left_margin=margin, bottom_margin=margin)
 
     for j in 1:n_agents
         plot!(pz_base, t, baseline[j].x[3, :]; color=cols[j], label="Agent $j", lw=1.5)
