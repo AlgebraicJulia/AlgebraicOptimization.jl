@@ -5,6 +5,8 @@ using Reexport
 include("BlockSparseArrays.jl")
 include("MPC.jl")
 include("CellularSheaves.jl")
+include("VehicleInterface.jl")
+include("Controllers.jl")
 include("QuadrotorLQR.jl")
 #include("SheafNodes.jl")
 #include("DistributedSheaves.jl")
@@ -15,6 +17,8 @@ include("Parser.jl")
 
 @reexport using .MPC
 @reexport using .CellularSheaves
+@reexport using .VehicleInterface
+@reexport using .Controllers
 #@reexport using .SheafNodes
 #@reexport using .DistributedSheaves
 #@reexport using .ThreadedSheaves

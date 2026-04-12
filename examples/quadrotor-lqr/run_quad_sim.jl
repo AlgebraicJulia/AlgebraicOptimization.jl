@@ -31,6 +31,5 @@ savefig(plot_trajectories(lqr_runs; title="LQR trajectories"), fp * "trajectorie
 savefig(plot_trajectories(pid_runs; title="PID trajectories"), fp * "trajectories_pid_" * date * ".png")
 savefig(plot_formation_error(lqr_runs, D, b; title="LQR formation error"), fp * "formation_error_lqr_" * date * ".png")
 savefig(plot_formation_error(pid_runs, D, b; title="PID formation error"), fp * "formation_error_pid_" * date * ".png")
-savefig(plot_motor_commands(lqr_runs[1], 1), fp * "motor_commands_agent1_" * date * ".png")
 
 println("Done. Plots written to " * fp)

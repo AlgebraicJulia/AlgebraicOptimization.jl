@@ -4,34 +4,40 @@ using LinearAlgebra
 using Plots
 using ControlSystems
 using ..CellularSheaves
+using ..VehicleInterface
+using ..Controllers
+import ..VehicleInterface: compute_control
 
 export QuadrotorParams, DEFAULT_PARAMS
-export hover_equilibrium, linearize_hover, assemble_full_plant
+export QuadrotorModel
 export LQRController
-export compute_control, SheafControllerInterface, update_reference!, step!
 export PIDController
 export formation_coboundary, SwarmCoordinator, sheaf_plan_step!, swarm_step!
-export SimRecord, run_baseline_sim, run_coordinated_sim
-export plot_trajectories, plot_formation_error, plot_motor_commands, compare_runs
+export run_baseline_sim, run_coordinated_sim
+export plot_trajectories, plot_formation_error, compare_runs
 
 """
     QuadrotorParams
 
-Physical parameters (SI units).
+Physical parameters for a quadrotor (SI units).
+
+Dynamics derived from: Bouabdallah, "Design and control of quadrotors with
+application to autonomous flying", EPFL PhD thesis, 2007.
+Default values from: An et al., AIMS Electronics and Electrical
+Engineering, doi:10.3934/electreng.2026002.
 """
 struct QuadrotorParams
-    m::Float64  # total mass
-    g::Float64  # gravity
-    Ix::Float64 # roll moment of intertia
-    Iy::Float64 # pitch moment of inertia
-    Iz::Float64 # yaw moment of inertia
-    l::Float64  # arm length
-    Jr::Float64 # rotor inertia
-    kf::Float64 # thrust coefficient
-    km::Float64 # drag coefficient
+    m::Float64   # total mass (kg)
+    g::Float64   # gravitational acceleration (m/s²)
+    Ix::Float64  # roll moment of inertia (kg·m²)
+    Iy::Float64  # pitch moment of inertia (kg·m²)
+    Iz::Float64  # yaw moment of inertia (kg·m²)
+    l::Float64   # arm length (m)
+    Jr::Float64  # rotor inertia (kg·m²)
+    kf::Float64  # thrust coefficient (N·s²/rad²)
+    km::Float64  # drag coefficient (N·m·s²/rad²)
 end
 
-# Symmetric test vehicle from Bouabdallah 2004
 const DEFAULT_PARAMS = QuadrotorParams(
     0.468,
     9.81,
@@ -44,32 +50,35 @@ const DEFAULT_PARAMS = QuadrotorParams(
     1.140e-7,
 )
 
+# ── Model ─────────────────────────────────────────────────────────────────────
+
 """
     hover_equilibrium(p) -> (x0, ω0)
 
-Returns the 12-state hover equilibrium (all zeros) and per-rotor speed ω₀ = √(mg/4kf).
+12-state hover equilibrium (all zeros) and per-rotor speed ω₀ = √(mg / 4kf).
 """
 function hover_equilibrium(p::QuadrotorParams)
     ω0 = sqrt(p.m * p.g / (4 * p.kf))
-    x0 = zeros(12)
-    return x0, ω0
+    return zeros(12), ω0
 end
 
 """
     linearize_hover(p) -> (A_pos, B_pos, A_att, B_att, A_z, B_z)
 
-Linearize about hover, giving three decoupled subsystems:
-- Position [x,y,ẋ,ẏ] → [φ_cmd, θ_cmd]
-- Attitude [φ,θ,ψ,p,q,r] → [U₂,U₃,U₄]
-- Altitude [z,ż] → δU₁
+Analytic linearization about hover giving three decoupled subsystems:
+- Position  [x, y, ẋ, ẏ]       → [φ_cmd, θ_cmd]
+- Attitude  [φ, θ, ψ, p, q, r] → [U₂, U₃, U₄]
+- Altitude  [z, ż]              → δU₁
+
+Ref: Bouabdallah 2007, §3.3.
 """
 function linearize_hover(p::QuadrotorParams)
-    g, m = p.g, p.m
+    g = p.g
     Ix, Iy, Iz = p.Ix, p.Iy, p.Iz
     l, Jr = p.l, p.Jr
     kf = p.kf
 
-    ω0 = sqrt(m * g / (4 * kf))
+    ω0 = sqrt(p.m * g / (4 * kf))
     Ωr0 = 0.0
 
     A_pos = [0.0 0.0 1.0 0.0;
@@ -77,10 +86,10 @@ function linearize_hover(p::QuadrotorParams)
              0.0 0.0 0.0 0.0;
              0.0 0.0 0.0 0.0]
 
-    B_pos = [0.0  0.0;
-             0.0  0.0;
-             0.0  g;
-             -g   0.0]
+    B_pos = [0.0 0.0;
+             0.0 0.0;
+             0.0 g;
+             -g  0.0]
 
     a_pq = Jr / Ix * Ωr0
     a_qp = -Jr / Iy * Ωr0
@@ -102,48 +111,96 @@ function linearize_hover(p::QuadrotorParams)
     A_z = [0.0 1.0;
            0.0 0.0]
 
-    B_z = reshape([0.0; 1.0/m], 2, 1)
+    B_z = reshape([0.0; 1.0/p.m], 2, 1)
 
     return A_pos, B_pos, A_att, B_att, A_z, B_z
 end
 
 """
-    assemble_full_plant(p) -> (A, B, U_eq)
+    QuadrotorModel <: AbstractVehicleModel
 
-Embed decoupled subsystems into the full 12x12 state and 12x4 input matrices.
-State ordering: x = [x,y,z, ẋ,ẏ,ż, φ,θ,ψ, p,q,r], inputs U = [U₁,U₂,U₃,U₄].
-Linearized error dynamics: ẋ = A·x + B·(U - U_eq), U_eq = [mg,0,0,0].
+Full nonlinear quadrotor. Implements the VehicleInterface.
+
+    State:   x = [x, y, z, ẋ, ẏ, ż, φ, θ, ψ, p, q, r]  (12-dim)
+    Control: u = [U₁, U₂, U₃, U₄]  (thrust + attitude virtual inputs)
+
+Ref: Bouabdallah 2007; Khan et al., "Robust Control of a Quadrotor",
+IEEE Access, 2024.
 """
-function assemble_full_plant(p::QuadrotorParams = DEFAULT_PARAMS)
-    A_pos, B_pos, A_att, B_att, A_z, B_z = linearize_hover(p)
-
-    A = zeros(12, 12)
-    A[1, 4] = 1.0
-    A[2, 5] = 1.0
-    A[3, 6] = 1.0
-    A[4, 8] = p.g
-    A[5, 7] = -p.g
-    A[7, 10] = 1.0
-    A[8, 11] = 1.0
-    A[9, 12] = 1.0
-    A[10, 11] = A_att[4, 5]
-    A[11, 10] = A_att[5, 4]
-
-    B = zeros(12, 4)
-    B[6, 1] = 1.0 / p.m
-    B[10, 2] = p.l / p.Ix
-    B[11, 3] = p.l / p.Iy
-    B[12, 4] = 1.0 / p.Iz
-
-    U_eq = [p.m * p.g, 0.0, 0.0, 0.0]
-
-    return A, B, U_eq
+struct QuadrotorModel <: AbstractVehicleModel
+    params::QuadrotorParams
 end
+
+QuadrotorModel() = QuadrotorModel(DEFAULT_PARAMS)
+
+VehicleInterface.state_dim(::QuadrotorModel) = 12
+VehicleInterface.control_dim(::QuadrotorModel) = 4
+VehicleInterface.position_indices(::QuadrotorModel) = 1:3
+
+function VehicleInterface.equilibrium(model::QuadrotorModel)
+    x0, _ = hover_equilibrium(model.params)
+    u0 = [model.params.m * model.params.g, 0.0, 0.0, 0.0]
+    return x0, u0
+end
+
+"""
+    dynamics(model::QuadrotorModel, x, u) -> ẋ
+
+Full nonlinear quadrotor dynamics. Gyroscopic rotor coupling omitted (Ωr ≈ 0
+at symmetric hover). ForwardDiff-compatible via `promote_type`.
+
+Ref: Bouabdallah 2007, §4.2.
+"""
+function VehicleInterface.dynamics(model::QuadrotorModel, x::AbstractVector, u::AbstractVector)
+    p = model.params
+    m, g = p.m, p.g
+    Ix, Iy, Iz, l = p.Ix, p.Iy, p.Iz, p.l
+
+    φ, θ, ψ = x[7], x[8], x[9]
+    pv, q, r = x[10], x[11], x[12]
+    U1, U2, U3, U4 = u[1], u[2], u[3], u[4]
+
+    cφ, sφ = cos(φ), sin(φ)
+    cθ, sθ, tθ = cos(θ), sin(θ), tan(θ)
+    cψ, sψ = cos(ψ), sin(ψ)
+
+    T = promote_type(eltype(x), eltype(u))
+    ẋ = Vector{T}(undef, 12)
+
+    # Position kinematics
+    ẋ[1] = x[4]
+    ẋ[2] = x[5]
+    ẋ[3] = x[6]
+
+    # Translational dynamics (world frame)
+    ẋ[4] = (cφ*sθ*cψ + sφ*sψ) * U1/m
+    ẋ[5] = (cφ*sθ*sψ - sφ*cψ) * U1/m
+    ẋ[6] = -g + cφ*cθ * U1/m
+
+    # Euler angle kinematics
+    ẋ[7] = pv + (q*sφ + r*cφ) * tθ
+    ẋ[8] = q*cφ - r*sφ
+    ẋ[9] = (q*sφ + r*cφ) / cθ
+
+    # Rotational dynamics (body frame)
+    ẋ[10] = (Iy - Iz)/Ix * q*r + l/Ix * U2
+    ẋ[11] = (Iz - Ix)/Iy * pv*r + l/Iy * U3
+    ẋ[12] = (Ix - Iy)/Iz * pv*q + 1/Iz * U4
+
+    return ẋ
+end
+
+# ── LQR Controller ────────────────────────────────────────────────────────────
 
 """
     LQRController
 
-Pre-computed cascade LQR gains. K_pos (2x4), K_att (3x6), K_z (1x2).
+Cascade LQR for the quadrotor. Solves three decoupled CAREs (position,
+attitude, altitude) rather than one 12-state CARE, which is ill-conditioned.
+Gains from Khan et al. 2024 are used as defaults.
+
+Ref: Khan et al., "Development of an LQR-Based Control Algorithm
+for Quadcopter", IEEE Access, 2024.
 """
 struct LQRController
     K_pos::Matrix{Float64}
@@ -152,7 +209,6 @@ struct LQRController
     params::QuadrotorParams
 end
 
-# Default weights from Khan et al. 2024
 function LQRController(
     p::QuadrotorParams = DEFAULT_PARAMS;
     Q_pos::AbstractMatrix = Diagonal([0.1, 0.1, 0.001, 0.001]),
@@ -164,9 +220,7 @@ function LQRController(
 )
     A_pos, B_pos, A_att, B_att, A_z, B_z = linearize_hover(p)
 
-    for (name, A, B) in (("position", A_pos, B_pos),
-                          ("attitude", A_att, B_att),
-                          ("altitude", A_z, B_z))
+    for (name, A, B) in (("position", A_pos, B_pos), ("attitude", A_att, B_att), ("altitude", A_z, B_z))
         r = rank(ctrb(A, B))
         r == size(A, 1) || @warn "$name subsystem is NOT controllable (rank = $r)"
     end
@@ -179,16 +233,16 @@ function LQRController(
 end
 
 """
-    compute_control(ctrl, x, x_ref) -> (ω², U)
+    compute_control(ctrl::LQRController, x, x_ref) -> U
 
-Cascade control law u = -K(x - x_ref), then mixer inversion M·ω² = U.
-Position loop sets attitude corrections; attitude loop sets torques.
+Cascade control law. Position loop computes attitude angle commands; attitude
+loop computes torques. Returns U = [U₁, U₂, U₃, U₄].
 """
 function compute_control(ctrl::LQRController, x::AbstractVector, x_ref::AbstractVector)
     p = ctrl.params
 
-    e_pos = x[[1,2,4,5]] - x_ref[[1,2,4,5]]
-    e_z = x[[3,6]] - x_ref[[3,6]]
+    e_pos = x[[1, 2, 4, 5]] - x_ref[[1, 2, 4, 5]]
+    e_z = x[[3, 6]] - x_ref[[3, 6]]
 
     φθ_cmd = -ctrl.K_pos * e_pos
     δU1 = (-ctrl.K_z * e_z)[1]
@@ -200,33 +254,29 @@ function compute_control(ctrl::LQRController, x::AbstractVector, x_ref::Abstract
     U1 = p.m * p.g + δU1
     U2, U3, U4 = U_att
 
-    kf, km, l = p.kf, p.km, p.l
-    M = [kf    kf      kf     kf;
-         0.0  -kf*l    0.0    kf*l;
-         kf*l  0.0    -kf*l   0.0;
-        -km    km     -km     km]
-
-    ω² = M \ [U1; U2; U3; U4]
-
-    return ω², [U1, U2, U3, U4]
+    return [U1, U2, U3, U4]
 end
+
+# ── PID Controller ────────────────────────────────────────────────────────────
 
 """
     PIDController
 
-Cascaded PID tuned via `loopshapingPID` (ControlSystems.jl), independently of LQR.
-Each channel is a SISO loop over its double-integrator plant P(s) = gain/s².
-Gains target a specified crossover frequency with default Mt/ϕt margins,
-which are appropriate for double-integrator (inertial) plants.
+Cascaded PID tuned via `loopshapingPID`. Each channel is a SISO loop over
+its double-integrator plant P(s) = gain/s² at hover. Gains target a specified
+crossover frequency.
+
+State velocities and angular rates are used directly as derivative terms,
+avoiding finite differences.
 """
 mutable struct PIDController
-    Kp_pos::Vector{Float64} # [x, y]
+    Kp_pos::Vector{Float64}  # [x, y]
     Ki_pos::Vector{Float64}
     Kd_pos::Vector{Float64}
     Kp_z::Float64
     Ki_z::Float64
     Kd_z::Float64
-    Kp_att::Vector{Float64} # [φ, θ, ψ]
+    Kp_att::Vector{Float64}  # [φ, θ, ψ]
     Ki_att::Vector{Float64}
     Kd_att::Vector{Float64}
     e_int_pos::Vector{Float64}
@@ -238,9 +288,9 @@ end
 
 function PIDController(
     p::QuadrotorParams = DEFAULT_PARAMS;
-    ω_att::Float64 = 10.0,  # attitude loop crossover frequency (rad/s)
-    ω_pos::Float64 = 1.5,   # position loop crossover frequency (rad/s)
-    ω_z::Float64 = 2.0,     # altitude loop crossover frequency (rad/s)
+    ω_att::Float64 = 10.0,
+    ω_pos::Float64 = 1.5,
+    ω_z::Float64 = 2.0,
     dt::Float64 = 1e-3,
 )
     g, m, l = p.g, p.m, p.l
@@ -253,15 +303,13 @@ function PIDController(
     P_θ = tf(l/Iy, [1.0, 0.0, 0.0])
     P_ψ = tf(1/Iz, [1.0, 0.0, 0.0])
 
-    # loopshapingPID returns parallel-form gains (Kp + Ki/s + Kd·s) tuned to
-    # hit the target crossover with adequate phase margin.
     _, kp_pos, ki_pos, kd_pos, _, _ = loopshapingPID(P_pos, ω_pos; doplot=false, form=:parallel)
     _, kp_z, ki_z, kd_z, _, _ = loopshapingPID(P_z, ω_z; doplot=false, form=:parallel)
     _, kp_φ, ki_φ, kd_φ, _, _ = loopshapingPID(P_φ, ω_att; doplot=false, form=:parallel)
     _, kp_θ, ki_θ, kd_θ, _, _ = loopshapingPID(P_θ, ω_att; doplot=false, form=:parallel)
     _, kp_ψ, ki_ψ, kd_ψ, _, _ = loopshapingPID(P_ψ, ω_att * 0.3; doplot=false, form=:parallel)
 
-    # x and y share the same plant so they get the same gains
+    # x and y share the same plant
     return PIDController(
         [kp_pos, kp_pos], [ki_pos, ki_pos], [kd_pos, kd_pos],
         kp_z, ki_z, kd_z,
@@ -272,17 +320,16 @@ function PIDController(
 end
 
 """
-    compute_control(ctrl::PIDController, x, x_ref) -> (ω², U)
+    compute_control(ctrl::PIDController, x, x_ref) -> U
 
-Cascaded PID control law. State velocities and rates are used directly as the
-derivative term. Position loop outputs angle commands which are added to the
-attitude reference before the attitude loop runs.
+Cascaded PID control law. Position loop outputs angle commands which feed into
+the attitude reference. Returns U = [U₁, U₂, U₃, U₄].
 """
 function compute_control(ctrl::PIDController, x::AbstractVector, x_ref::AbstractVector)
     p = ctrl.params
     dt = ctrl.dt
 
-    # Position PID — ẋ, ẏ are states 4, 5
+    # Position loop — ẋ, ẏ are states 4, 5
     e_x = x[1] - x_ref[1]
     e_y = x[2] - x_ref[2]
     ė_x = x[4] - x_ref[4]
@@ -291,14 +338,13 @@ function compute_control(ctrl::PIDController, x::AbstractVector, x_ref::Abstract
     θ_cmd = -(ctrl.Kp_pos[1]*e_x + ctrl.Ki_pos[1]*ctrl.e_int_pos[1] + ctrl.Kd_pos[1]*ė_x)
     φ_cmd = -(ctrl.Kp_pos[2]*e_y + ctrl.Ki_pos[2]*ctrl.e_int_pos[2] + ctrl.Kd_pos[2]*ė_y)
 
-    # Altitude PID — ż is state 6
+    # Altitude loop — ż is state 6
     e_z = x[3] - x_ref[3]
     ė_z = x[6] - x_ref[6]
     ctrl.e_int_z += e_z * dt
     δU1 = -(ctrl.Kp_z*e_z + ctrl.Ki_z*ctrl.e_int_z + ctrl.Kd_z*ė_z)
 
-    # Attitude PID — angle commands from position loop added to attitude reference
-    # rates p, q, r are states 10, 11, 12
+    # Attitude loop — angle commands from position loop added to attitude reference
     e_ang = x[7:9] - [x_ref[7] + φ_cmd, x_ref[8] + θ_cmd, x_ref[9]]
     e_rate = x[10:12] - x_ref[10:12]
     ctrl.e_int_att .+= e_ang * dt
@@ -308,56 +354,20 @@ function compute_control(ctrl::PIDController, x::AbstractVector, x_ref::Abstract
 
     U1 = p.m * p.g + δU1
 
-    kf, km, l = p.kf, p.km, p.l
-    M = [kf    kf      kf     kf;
-         0.0  -kf*l    0.0    kf*l;
-         kf*l  0.0    -kf*l   0.0;
-        -km    km     -km     km]
-    ω² = M \ [U1; U2; U3; U4]
-
-    return ω², [U1, U2, U3, U4]
+    return [U1, U2, U3, U4]
 end
 
-"""
-    SheafControllerInterface
-
-Mediates time-scale separation between the slow sheaf planner (≤10 Hz) and
-the fast inner loop (~1 kHz). Controller-agnostic: works with LQRController,
-PIDController, or any type that implements compute_control(ctrl, x, x_ref).
-"""
-mutable struct SheafControllerInterface
-    ctrl  # LQRController, PIDController, or any compatible type
-    x_ref::Vector{Float64}
-    t_last_plan::Float64
-    planner_dt::Float64
-end
-
-function SheafControllerInterface(ctrl; planner_hz::Float64 = 10.0)
-    return SheafControllerInterface(ctrl, zeros(12), -Inf, 1.0 / planner_hz)
-end
-
-function update_reference!(iface::SheafControllerInterface,
-                            x_ref_new::AbstractVector, t_now::Float64)
-    @assert length(x_ref_new) == 12 "x_ref must be a 12-element state vector"
-    copyto!(iface.x_ref, x_ref_new)
-    iface.t_last_plan = t_now
-    return iface
-end
-
-"""
-    step!(iface, x) -> (ω², U)
-
-Inner-loop tick (~1 kHz): evaluate the inner-loop control law.
-"""
-function step!(iface::SheafControllerInterface, x::AbstractVector)
-    return compute_control(iface.ctrl, x, iface.x_ref)
-end
+# ── Sheaf coordination ────────────────────────────────────────────────────────
 
 """
     formation_coboundary(n_agents, edges, offsets) -> (D, b)
 
-Build coboundary matrix D ∈ ℝ^{3mx3n} and offset vector b for a formation
-sheaf over a graph with n agents and m edges. Formation is satisfied when Dx = b.
+Build coboundary matrix D ∈ ℝ^{3mx3n} and offset vector b for a position
+formation sheaf over a graph with n agents and m edges. Formation is satisfied
+when Dx = b.
+
+Ref: Hansen & Ghrist, "Toward a Spectral Theory of Cellular Sheaves",
+Journal of Applied and Computational Topology, 2019.
 """
 function formation_coboundary(
     n_agents::Int,
@@ -389,8 +399,8 @@ end
     SwarmCoordinator
 
 N-agent swarm using a cellular sheaf Laplacian for formation coordination.
-Slow outer planner (≤10 Hz) sets position references via `sheaf_plan_step!`;
-fast inner loop (~1 kHz) tracks them via `swarm_step!`.
+Slow outer planner sets position references via `sheaf_plan_step!`;
+fast inner loop tracks them via `swarm_step!`.
 """
 mutable struct SwarmCoordinator
     sheaf::CellularSheaf
@@ -417,13 +427,9 @@ end
     sheaf_plan_step!(coord, states, t_now) -> pos_new
 
 Outer planner tick. Projects current positions onto the formation-consistent
-subspace {x : Dx = b} via conjugate gradients and updates each agent's reference.
+subspace {x : Dx = b} and updates each agent's reference.
 """
-function sheaf_plan_step!(
-    coord::SwarmCoordinator,
-    states::Vector{<:AbstractVector},
-    t_now::Float64,
-)
+function sheaf_plan_step!(coord::SwarmCoordinator, states::Vector{<:AbstractVector}, t_now::Float64)
     @assert length(states) == coord.n_agents "expected $(coord.n_agents) state vectors"
 
     pos = vcat([s[1:3] for s in states]...)
@@ -439,42 +445,19 @@ function sheaf_plan_step!(
 end
 
 """
-    swarm_step!(coord, states) -> Vector{Tuple}
+    swarm_step!(coord, states) -> Vector{Vector}
 
-Inner-loop tick (~1 kHz): evaluate u = -K(x - x_ref) for each agent.
+Inner-loop tick: evaluate `compute_control` for each agent.
 """
 function swarm_step!(coord::SwarmCoordinator, states::Vector{<:AbstractVector})
     @assert length(states) == coord.n_agents "expected $(coord.n_agents) state vectors"
     return [step!(coord.controllers[i], states[i]) for i in 1:coord.n_agents]
 end
 
-"""
-    SimRecord
-
-Per-agent simulation history. Fields: t, x (12xn), x_ref (12xn), U (4xn), omega2 (4xn).
-"""
-struct SimRecord
-    t::Vector{Float64}
-    x::Matrix{Float64}
-    x_ref::Matrix{Float64}
-    U::Matrix{Float64}
-    omega2::Matrix{Float64}
-end
-
-# RK4 integration of linearized plant ẋ = A·x + B·(u - U_eq).
-function _rk4_step(A::Matrix, B::Matrix, U_eq::Vector,
-                   x::AbstractVector, u::AbstractVector, dt::Float64)
-    δu = u - U_eq
-    f(s) = A * s + B * δu
-    k1 = f(x)
-    k2 = f(x + dt/2 * k1)
-    k3 = f(x + dt/2 * k2)
-    k4 = f(x + dt * k3)
-    return x + (dt / 6) .* (k1 + 2k2 + 2k3 + k4)
-end
+# ── Simulation ────────────────────────────────────────────────────────────────
 
 """
-    run_baseline_sim(waypoints; params, x0s, dt, t_end, planner_hz) -> Vector{SimRecord}
+    run_baseline_sim(waypoints; params, ctrl, x0s, dt, t_end) -> Vector{SimRecord}
 
 Each agent independently tracks its own fixed waypoint with no inter-agent coupling.
 """
@@ -489,15 +472,13 @@ function run_baseline_sim(
 )
     n_agents = length(waypoints)
     n_steps = round(Int, t_end / dt)
-
-    A_full, B_full, U_eq = assemble_full_plant(params)
+    model = LinearizedModel(QuadrotorModel(params))
     agent_ctrls = [deepcopy(ctrl) for _ in 1:n_agents]
 
     records = [SimRecord(
         Vector{Float64}(undef, n_steps),
         Matrix{Float64}(undef, 12, n_steps),
         Matrix{Float64}(undef, 12, n_steps),
-        Matrix{Float64}(undef, 4, n_steps),
         Matrix{Float64}(undef, 4, n_steps),
     ) for _ in 1:n_agents]
 
@@ -508,13 +489,12 @@ function run_baseline_sim(
         for i in 1:n_agents
             x = states[i]
             x_ref = waypoints[i]
-            ω², U = compute_control(agent_ctrls[i], x, x_ref)
+            U = compute_control(agent_ctrls[i], x, x_ref)
             records[i].t[k] = t_now
             records[i].x[:, k] = x
             records[i].x_ref[:, k] = x_ref
-            records[i].U[:, k] = U
-            records[i].omega2[:, k] = ω²
-            states[i] = _rk4_step(A_full, B_full, U_eq, x, U, dt)
+            records[i].u[:, k] = U
+            states[i] = _rk4(model, x, U, dt)
         end
     end
 
@@ -525,7 +505,7 @@ end
     run_coordinated_sim(n_agents, edges, offsets; ...) -> Vector{SimRecord}
 
 Sheaf-coordinated simulation. Outer planner updates position references at
-`planner_hz`; each agent's LQR inner loop runs at 1/dt.
+`planner_hz`; each agent's inner loop runs at 1/dt.
 """
 function run_coordinated_sim(
     n_agents::Int,
@@ -540,11 +520,9 @@ function run_coordinated_sim(
 )
     n_steps = round(Int, t_end / dt)
     planner_ticks = round(Int, (1.0 / planner_hz) / dt)
+    model = LinearizedModel(QuadrotorModel(params))
 
-    A_full, B_full, U_eq = assemble_full_plant(params)
-
-    coord = SwarmCoordinator(n_agents, edges, offsets;
-                             params=params, ctrl=ctrl, planner_hz=planner_hz)
+    coord = SwarmCoordinator(n_agents, edges, offsets; params=params, ctrl=ctrl, planner_hz=planner_hz)
 
     for i in 1:n_agents
         update_reference!(coord.controllers[i], copy(x0s[i]), 0.0)
@@ -554,7 +532,6 @@ function run_coordinated_sim(
         Vector{Float64}(undef, n_steps),
         Matrix{Float64}(undef, 12, n_steps),
         Matrix{Float64}(undef, 12, n_steps),
-        Matrix{Float64}(undef, 4, n_steps),
         Matrix{Float64}(undef, 4, n_steps),
     ) for _ in 1:n_agents]
 
@@ -570,26 +547,26 @@ function run_coordinated_sim(
         results = swarm_step!(coord, states)
 
         for i in 1:n_agents
-            ω², U = results[i]
+            U = results[i]
             records[i].t[k] = t_now
             records[i].x[:, k] = states[i]
             records[i].x_ref[:, k] = coord.controllers[i].x_ref
-            records[i].U[:, k] = U
-            records[i].omega2[:, k] = ω²
-            states[i] = _rk4_step(A_full, B_full, U_eq, states[i], U, dt)
+            records[i].u[:, k] = U
+            states[i] = _rk4(model, states[i], U, dt)
         end
     end
 
     return records
 end
 
+# ── Plotting ──────────────────────────────────────────────────────────────────
+
 """
     plot_trajectories(records; title) -> Plot
 
 x, y, z time series for all agents. Dashed lines show references.
 """
-function plot_trajectories(records::Vector{SimRecord};
-                           title::String = "Position trajectories")
+function plot_trajectories(records::Vector{SimRecord}; title::String = "Position trajectories")
     t = records[1].t
     cols = palette(:tab10)
     labels = ("x [m]", "y [m]", "z [m]")
@@ -600,18 +577,18 @@ function plot_trajectories(records::Vector{SimRecord};
     for (row, (lbl, idx)) in enumerate(zip(labels, (1, 2, 3)))
         for (j, rec) in enumerate(records)
             plot!(p[row], t, rec.x[idx, :];
-                  label=row == 1 ? "Agent $j" : "",
-                  color=cols[j],
-                  ylabel=lbl,
-                  xlabel=row == 3 ? "t [s]" : "",
-                  legend=row == 1 ? :topright : false,
-                  linewidth=1.5)
+                label=row == 1 ? "Agent $j" : "",
+                color=cols[j],
+                ylabel=lbl,
+                xlabel=row == 3 ? "t [s]" : "",
+                legend=row == 1 ? :topright : false,
+                linewidth=1.5)
             plot!(p[row], t, rec.x_ref[idx, :];
-                  label="",
-                  color=cols[j],
-                  linestyle=:dash,
-                  alpha=0.5,
-                  linewidth=1.0)
+                label="",
+                color=cols[j],
+                linestyle=:dash,
+                alpha=0.5,
+                linewidth=1.0)
         end
     end
     return p
@@ -629,49 +606,23 @@ function plot_formation_error(
     title::String = "Formation consistency error",
 )
     t = records[1].t
-    n_steps = length(t)
     err = [norm(D * vcat([records[i].x[1:3, k] for i in eachindex(records)]...) - b)
-           for k in 1:n_steps]
+           for k in 1:length(t)]
 
     return plot(t, err;
-                xlabel="t [s]",
-                ylabel="‖Dx - b‖  [m]",
-                title=title,
-                legend=false,
-                linewidth=2,
-                color=:steelblue,
-                size=(800, 300),
-                left_margin=10Plots.mm, bottom_margin=8Plots.mm)
+        xlabel="t [s]",
+        ylabel="‖Dx - b‖  [m]",
+        title=title,
+        legend=false,
+        linewidth=2,
+        color=:steelblue,
+        size=(800, 300),
+        left_margin=10Plots.mm,
+        bottom_margin=8Plots.mm)
 end
 
 """
-    plot_motor_commands(record, agent_id; title) -> Plot
-
-Virtual inputs U = [U₁,U₂,U₃,U₄] and squared motor speeds ω² for one agent.
-"""
-function plot_motor_commands(record::SimRecord, agent_id::Int = 1;
-                             title::String = "Motor commands — Agent $agent_id")
-    t = record.t
-    p1 = plot(t, record.U';
-              labels=["U₁" "U₂" "U₃" "U₄"],
-              ylabel="Virtual input [N or N·m]",
-              xlabel="",
-              title=title,
-              linewidth=1.5,
-              legend=:topright,
-              left_margin=10Plots.mm)
-    p2 = plot(t, record.omega2';
-              labels=["ω₁²" "ω₂²" "ω₃²" "ω₄²"],
-              ylabel="ω² [rad²/s²]",
-              xlabel="t [s]",
-              linewidth=1.5,
-              legend=:topright,
-              left_margin=10Plots.mm, bottom_margin=8Plots.mm)
-    return plot(p1, p2; layout=(2, 1), size=(800, 500), link=:x)
-end
-
-"""
-    compare_runs(run1, run2, D, b; title, label1, label2) -> Plot
+    compare_runs(baseline, coordinated, D, b; title, label1, label2) -> Plot
 
 2x2 comparison: z-trajectories and formation error for two runs.
 """
@@ -694,10 +645,16 @@ function compare_runs(
     end
 
     margin = 8Plots.mm
-    pz_base  = plot(title="$label1 — z [m]", xlabel="", ylabel="z [m]", legend=:bottomright, left_margin=margin)
-    pz_coord = plot(title="$label2 — z [m]", xlabel="", ylabel="z [m]", legend=:bottomright, left_margin=margin)
-    pe_base  = plot(title="$label1 — formation error", xlabel="t [s]", ylabel="‖Dx-b‖ [m]", legend=false, color=:crimson, linewidth=2, left_margin=margin, bottom_margin=margin)
-    pe_coord = plot(title="$label2 — formation error", xlabel="t [s]", ylabel="‖Dx-b‖ [m]", legend=false, color=:steelblue, linewidth=2, left_margin=margin, bottom_margin=margin)
+    pz_base = plot(title="$label1 — z [m]", xlabel="", ylabel="z [m]",
+                   legend=:bottomright, left_margin=margin)
+    pz_coord = plot(title="$label2 — z [m]", xlabel="", ylabel="z [m]",
+                    legend=:bottomright, left_margin=margin)
+    pe_base = plot(title="$label1 — formation error", xlabel="t [s]", ylabel="‖Dx-b‖ [m]",
+                   legend=false, color=:crimson, linewidth=2,
+                   left_margin=margin, bottom_margin=margin)
+    pe_coord = plot(title="$label2 — formation error", xlabel="t [s]", ylabel="‖Dx-b‖ [m]",
+                    legend=false, color=:steelblue, linewidth=2,
+                    left_margin=margin, bottom_margin=margin)
 
     for j in 1:n_agents
         plot!(pz_base, t, baseline[j].x[3, :]; color=cols[j], label="Agent $j", lw=1.5)
