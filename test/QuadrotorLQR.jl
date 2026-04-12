@@ -74,12 +74,13 @@ using ControlSystems
     # ── SheafControllerInterface ─────────────────────────────────────────────
     @testset "SheafControllerInterface" begin
         ctrl  = LQRController(p)
-        iface = SheafControllerInterface(ctrl; planner_hz=10.0)
+        iface = SheafControllerInterface(ctrl, QuadrotorModel(); planner_hz=10.0)
 
         x0, _ = equilibrium(QuadrotorModel())
 
         # Before any planner update x_ref = 0 (hover)
         U = step!(iface, x0)
+
         @test U[1] ≈ p.m * p.g  atol=1e-8
 
         # Planner updates reference (e.g. move 1 m in x)

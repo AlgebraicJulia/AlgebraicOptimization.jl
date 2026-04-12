@@ -7,16 +7,22 @@ edges   = [(1, 2), (2, 3)]
 offsets = Dict((1, 2) => [2.0, 0.0, 0.0],
                (2, 3) => [2.0, 0.0, 0.0])
 
-x0s = [zeros(12) for _ in 1:3]
-D, b = formation_coboundary(3, edges, offsets)
+n_agents = 3
+x0s = [zeros(12) for _ in 1:n_agents]
+D, b = formation_coboundary(n_agents, edges, offsets)
+
+lqr_models = [QuadrotorModel() for _ in 1:n_agents]
+pid_models = [QuadrotorModel() for _ in 1:n_agents]
+lqr_ctrls  = [LQRController() for _ in 1:n_agents]
+pid_ctrls  = [PIDController() for _ in 1:n_agents]
 
 println("Running coordinated LQR simulation...")
-lqr_runs = run_coordinated_sim(3, edges, offsets; ctrl=LQRController(), x0s=x0s, t_end=10.0)
+lqr_runs = run_coordinated_sim(lqr_models, lqr_ctrls, edges, offsets; x0s=x0s, t_end=10.0)
 
 println("Running coordinated PID simulation...")
-pid_runs = run_coordinated_sim(3, edges, offsets; ctrl=PIDController(), x0s=x0s, t_end=10.0)
+pid_runs = run_coordinated_sim(pid_models, pid_ctrls, edges, offsets; x0s=x0s, t_end=10.0)
 
-err(recs) = norm(D * vcat([recs[i].x[1:3, end] for i in 1:3]...) - b)
+err(recs) = norm(D * vcat([recs[i].x[1:3, end] for i in 1:n_agents]...) - b)
 println("\nFormation error at t = 10 s:")
 println("  LQR: ", round(err(lqr_runs), sigdigits=4), " m")
 println("  PID: ", round(err(pid_runs), sigdigits=4), " m")

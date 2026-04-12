@@ -88,8 +88,12 @@ mutable struct SheafControllerInterface
     planner_dt::Float64
 end
 
-function SheafControllerInterface(ctrl; n_states::Int = 12, planner_hz::Float64 = 10.0)
+function SheafControllerInterface(ctrl; n_states::Int, planner_hz::Float64 = 10.0)
     return SheafControllerInterface(ctrl, zeros(n_states), -Inf, 1.0 / planner_hz)
+end
+
+function SheafControllerInterface(ctrl, model::AbstractVehicleModel; planner_hz::Float64 = 10.0)
+    return SheafControllerInterface(ctrl; n_states=state_dim(model), planner_hz=planner_hz)
 end
 
 """

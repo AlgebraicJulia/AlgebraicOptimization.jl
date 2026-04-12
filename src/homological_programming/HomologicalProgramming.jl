@@ -7,6 +7,7 @@ include("MPC.jl")
 include("CellularSheaves.jl")
 include("VehicleInterface.jl")
 include("Controllers.jl")
+include("Swarm.jl")
 include("QuadrotorLQR.jl")
 include("UnicycleLQR.jl")
 #include("SheafNodes.jl")
@@ -20,6 +21,7 @@ include("Parser.jl")
 @reexport using .CellularSheaves
 @reexport using .VehicleInterface
 @reexport using .Controllers
+@reexport using .Swarm
 @reexport using .UnicycleLQR
 #@reexport using .SheafNodes
 #@reexport using .DistributedSheaves
