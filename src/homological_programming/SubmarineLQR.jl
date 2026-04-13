@@ -28,7 +28,7 @@ the linearized model is three decoupled double integrators.
 Default values from Ridley, Fontan & Corke, "Submarine Dynamic Modelling",
 ARCA 2003, Table 1.
 
-Note: the paper lists Yvv = 3.01 kg/m and Zww = 30.1 kg/m; the 10× difference
+Note: the paper lists Yvv = 3.01 kg/m and Zww = 30.1 kg/m; the 10x difference
 is inconsistent with a body of revolution and may be a transcription error. We
 assume the same drag in sway and heave, consistent with the added mass values and a
 torpedo-shaped body.
