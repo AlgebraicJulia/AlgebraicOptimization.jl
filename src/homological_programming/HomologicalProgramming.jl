@@ -10,6 +10,7 @@ include("Controllers.jl")
 include("Swarm.jl")
 include("QuadrotorLQR.jl")
 include("UnicycleLQR.jl")
+include("SubmarineLQR.jl")
 #include("SheafNodes.jl")
 #include("DistributedSheaves.jl")
 #include("ThreadedSheaves.jl")
@@ -28,6 +29,7 @@ include("Parser.jl")
 #@reexport using .ThreadedSheaves
 @reexport using .HomologicalPrograms
 @reexport using .QuadrotorLQR
+@reexport using .SubmarineLQR
 @reexport using .CellularSheafTerm
 @reexport using .CellularSheafParser: @cellular_sheaf
 
