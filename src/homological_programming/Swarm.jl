@@ -7,12 +7,12 @@ using ..Controllers
 
 export formation_coboundary
 export SwarmCoordinator, sheaf_plan_step!, swarm_step!
-export run_baseline_sim, run_coordinated_sim
+export run_baseline_sim, run_coordinated_sim, run_convoy_sim
 
 """
     formation_coboundary(n_agents, edges, offsets; pos_dim) -> (D, b)
 
-Build coboundary matrix D ∈ ℝ^{pos_dim·m × pos_dim·n} and offset vector b for
+Build coboundary matrix D ∈ ℝ^{pos_dim·m x pos_dim·n} and offset vector b for
 a position formation sheaf over a graph with n agents and m edges. Formation is
 satisfied when Dx = b. `pos_dim` is the dimension of the shared position space
 (default 3).
@@ -224,6 +224,84 @@ function run_coordinated_sim(
 
         if mod(k - 1, planner_ticks) == 0
             sheaf_plan_step!(coord, states, t_now)
+        end
+
+        results = swarm_step!(coord, states)
+
+        for i in 1:n_agents
+            u = results[i]
+            records[i].t[k] = t_now
+            records[i].x[:, k] = states[i]
+            records[i].x_ref[:, k] = coord.controllers[i].x_ref
+            records[i].u[:, k] = u
+            states[i] = _rk4(lin_models[i], states[i], u, dt)
+        end
+    end
+
+    return records
+end
+
+"""
+    run_convoy_sim(models, ctrls, edges, offsets, n_subs, sub_traj; x0s, dt, t_end, planner_hz)
+
+Convoy simulation. The first `n_subs` agents follow time-varying position
+references given by `sub_traj(i, t) -> Vector{Float64}` (desired 3-D position
+for sub agent `i` at time `t`). The remaining agents are followers whose
+references are updated by the sheaf planner.
+
+At each outer-loop tick the desired sub positions are injected into
+`sheaf_plan_step!` so the planner finds a formation-consistent configuration
+anchored to the trajectory, then the sub references are locked to the
+trajectory values so LQR drives them there.
+"""
+function run_convoy_sim(
+    models::Vector{<:AbstractVehicleModel},
+    ctrls::Vector,
+    edges::Vector{Tuple{Int,Int}},
+    offsets::Dict{Tuple{Int,Int}, Vector{Float64}} = Dict{Tuple{Int,Int}, Vector{Float64}}();
+    n_subs::Int,
+    sub_traj::Function,
+    x0s::Vector{<:AbstractVector} = [zeros(state_dim(m)) for m in models],
+    dt::Float64 = 1e-3,
+    t_end::Float64 = 60.0,
+    planner_hz::Float64 = 10.0,
+)
+    n_agents = length(models)
+    n_steps = round(Int, t_end / dt)
+    planner_ticks = round(Int, (1.0 / planner_hz) / dt)
+    lin_models = [LinearizedModel(m) for m in models]
+
+    coord = SwarmCoordinator(models, ctrls, edges, offsets; planner_hz=planner_hz)
+    for i in 1:n_agents
+        update_reference!(coord.controllers[i], copy(Vector{Float64}(x0s[i])), 0.0)
+    end
+
+    records = [SimRecord(
+        Vector{Float64}(undef, n_steps),
+        Matrix{Float64}(undef, state_dim(models[i]), n_steps),
+        Matrix{Float64}(undef, state_dim(models[i]), n_steps),
+        Matrix{Float64}(undef, control_dim(models[i]), n_steps),
+    ) for i in 1:n_agents]
+
+    states = [copy(Vector{Float64}(x0s[i])) for i in 1:n_agents]
+
+    for k in 1:n_steps
+        t_now = (k - 1) * dt
+
+        if mod(k - 1, planner_ticks) == 0
+            # Inject desired sub positions so the sheaf anchors to the trajectory
+            plan_states = copy.(states)
+            for i in 1:n_subs
+                plan_states[i][coord.pos_indices[i]] .= sub_traj(i, t_now)
+            end
+            sheaf_plan_step!(coord, plan_states, t_now)
+
+            # Lock sub references to the trajectory (override what sheaf wrote)
+            for i in 1:n_subs
+                x_ref = copy(coord.controllers[i].x_ref)
+                x_ref[coord.pos_indices[i]] .= sub_traj(i, t_now)
+                update_reference!(coord.controllers[i], x_ref, t_now)
+            end
         end
 
         results = swarm_step!(coord, states)

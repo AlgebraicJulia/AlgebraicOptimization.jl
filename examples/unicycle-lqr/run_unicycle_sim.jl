@@ -32,15 +32,40 @@ fp   = "examples/unicycle-lqr/figures/"
 isdir(fp) || mkdir(fp)
 date = Dates.format(now(), "yyyy-mm-dd_HH-MM-SS")
 
-savefig(compare_unicycle_runs(pid_run, lqr_run;
-        label1="PID", label2="LQR",
-        title="Coordinated PID vs. LQR (v₀ = $(v0) m/s)"),
-        fp * "comparison_" * date * ".png")
+pp_orange = RGB(223/255, 167/255, 119/255)
+pp_blue   = RGB(97/255,  136/255, 178/255)
+base_kw   = (fontfamily="Computer Modern", thickness_scaling=1.5,
+             guidefontsize=10, tickfontsize=9,
+             left_margin=8Plots.mm, bottom_margin=5Plots.mm,
+             top_margin=8Plots.mm, size=(800, 300))
 
-savefig(plot_unicycle_tracking(lqr_run; title="LQR tracking (v₀ = $(v0) m/s)"),
+# Lateral error comparison
+p_ey = plot(pid_run.t, pid_run.x[1, :];
+            label="PID", color=pp_orange, linewidth=2.0,
+            ylabel="Lateral error e_y (m)", xlabel="Time (s)", base_kw...)
+plot!(p_ey, lqr_run.t, lqr_run.x[1, :]; label="LQR", color=pp_blue, linewidth=2.0)
+hline!(p_ey, [0.0]; linestyle=:dash, color=:gray60, label="")
+savefig(p_ey, fp * "comparison_ey_" * date * ".png")
+
+# Heading error comparison
+p_psi = plot(pid_run.t, rad2deg.(pid_run.x[2, :]);
+             label="PID", color=pp_orange, linewidth=2.0,
+             ylabel="Heading error e_psi (deg)", xlabel="Time (s)", base_kw...)
+plot!(p_psi, lqr_run.t, rad2deg.(lqr_run.x[2, :]); label="LQR", color=pp_blue, linewidth=2.0)
+hline!(p_psi, [0.0]; linestyle=:dash, color=:gray60, label="")
+savefig(p_psi, fp * "comparison_psi_" * date * ".png")
+
+# Yaw rate comparison
+p_w = plot(pid_run.t, pid_run.u[1, :];
+           label="PID", color=pp_orange, linewidth=2.0,
+           ylabel="Yaw rate (rad/s)", xlabel="Time (s)", base_kw...)
+plot!(p_w, lqr_run.t, lqr_run.u[1, :]; label="LQR", color=pp_blue, linewidth=2.0)
+savefig(p_w, fp * "comparison_yawrate_" * date * ".png")
+
+savefig(plot_unicycle_tracking(lqr_run; title="LQR tracking (v_0 = $(v0) m/s)"),
         fp * "tracking_lqr_" * date * ".png")
 
-savefig(plot_unicycle_tracking(pid_run; title="PID tracking (v₀ = $(v0) m/s)"),
+savefig(plot_unicycle_tracking(pid_run; title="PID tracking (v_0 = $(v0) m/s)"),
         fp * "tracking_pid_" * date * ".png")
 
 println("Done. Plots written to " * fp)

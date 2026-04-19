@@ -357,36 +357,30 @@ function compute_control(ctrl::PIDController, x::AbstractVector, x_ref::Abstract
 end
 
 # ── Plotting ──────────────────────────────────────────────────────────────────
+# Palette matches PaperPlotting.jl: orange, blue, green, purple
+const _pp_cols = [RGB(223/255,167/255,119/255),
+                  RGB(97/255,136/255,178/255),
+                  RGB(172/255,207/255,146/255),
+                  RGB(216/255,201/255,238/255)]
 
 """
     plot_trajectories(records; title) -> Plot
 
-x, y, z time series for all agents. Dashed lines show references.
+x time series for all agents. Dashed lines show references.
 """
 function plot_trajectories(records::Vector{SimRecord}; title::String = "Position trajectories")
     t = records[1].t
-    cols = palette(:tab10)
-    labels = ("x [m]", "y [m]", "z [m]")
 
-    p = plot(layout=(3, 1), size=(800, 600), link=:x, plot_title=title,
+    p = plot(size=(800, 300), plot_title=title,
+             fontfamily="Computer Modern", thickness_scaling=1.5,
+             ylabel="x [m]", xlabel="t [s]", legend=:topright,
              left_margin=10Plots.mm, bottom_margin=6Plots.mm)
 
-    for (row, (lbl, idx)) in enumerate(zip(labels, (1, 2, 3)))
-        for (j, rec) in enumerate(records)
-            plot!(p[row], t, rec.x[idx, :];
-                label=row == 1 ? "Agent $j" : "",
-                color=cols[j],
-                ylabel=lbl,
-                xlabel=row == 3 ? "t [s]" : "",
-                legend=row == 1 ? :topright : false,
-                linewidth=1.5)
-            plot!(p[row], t, rec.x_ref[idx, :];
-                label="",
-                color=cols[j],
-                linestyle=:dash,
-                alpha=0.5,
-                linewidth=1.0)
-        end
+    for (j, rec) in enumerate(records)
+        plot!(p, t, rec.x[1, :];
+            label="Agent $j", color=_pp_cols[j], linewidth=2.0)
+        plot!(p, t, rec.x_ref[1, :];
+            label="", color=_pp_cols[j], linestyle=:dash, alpha=0.5, linewidth=1.2)
     end
     return p
 end
@@ -408,11 +402,12 @@ function plot_formation_error(
 
     return plot(t, err;
         xlabel="t [s]",
-        ylabel="‖Dx - b‖  [m]",
+        ylabel="‖δx - b‖  [m]",
         title=title,
         legend=false,
-        linewidth=2,
-        color=:steelblue,
+        linewidth=2.0,
+        color=_pp_cols[2],
+        fontfamily="Computer Modern", thickness_scaling=1.5,
         size=(800, 300),
         left_margin=10Plots.mm,
         bottom_margin=8Plots.mm)
@@ -433,7 +428,6 @@ function compare_runs(
     label2::String = "Coordinated",
 )
     t = baseline[1].t
-    cols = palette(:tab10)
     n_agents = length(baseline)
 
     function _err(recs)
@@ -441,28 +435,37 @@ function compare_runs(
          for k in eachindex(recs[1].t)]
     end
 
-    margin = 8Plots.mm
-    pz_base = plot(title="$label1 — z [m]", xlabel="", ylabel="z [m]",
-                   legend=:bottomright, left_margin=margin)
-    pz_coord = plot(title="$label2 — z [m]", xlabel="", ylabel="z [m]",
-                    legend=:bottomright, left_margin=margin)
-    pe_base = plot(title="$label1 — formation error", xlabel="t [s]", ylabel="‖Dx-b‖ [m]",
-                   legend=false, color=:crimson, linewidth=2,
-                   left_margin=margin, bottom_margin=margin)
-    pe_coord = plot(title="$label2 — formation error", xlabel="t [s]", ylabel="‖Dx-b‖ [m]",
-                    legend=false, color=:steelblue, linewidth=2,
-                    left_margin=margin, bottom_margin=margin)
+    margin = 10Plots.mm
+    px_base = plot(title="\n$label1", xlabel="", ylabel="x [m]",
+                   legend=:right, left_margin=margin, bottom_margin=4Plots.mm,
+                   fontfamily="Computer Modern", guidefontsize=10, tickfontsize=8)
+    px_coord = plot(title="\n$label2", xlabel="", ylabel="x [m]",
+                    legend=:right, left_margin=margin, bottom_margin=4Plots.mm,
+                    fontfamily="Computer Modern", guidefontsize=10, tickfontsize=8)
+    pe_base = plot(title="", xlabel="t [s]", ylabel="‖δx-b‖ [m]",
+                   legend=false, linewidth=2.0,
+                   left_margin=margin, bottom_margin=margin,
+                   fontfamily="Computer Modern", guidefontsize=10, tickfontsize=8)
+    pe_coord = plot(title="", xlabel="t [s]", ylabel="‖δx-b‖ [m]",
+                    legend=false, linewidth=2.0,
+                    left_margin=margin, bottom_margin=margin,
+                    fontfamily="Computer Modern", guidefontsize=10, tickfontsize=8)
 
     for j in 1:n_agents
-        plot!(pz_base, t, baseline[j].x[3, :]; color=cols[j], label="Agent $j", lw=1.5)
-        plot!(pz_coord, t, coordinated[j].x[3, :]; color=cols[j], label="Agent $j", lw=1.5)
+        plot!(px_base,  t, baseline[j].x[1, :];    color=_pp_cols[j], label="Agent $j", lw=2.0)
+        plot!(px_coord, t, coordinated[j].x[1, :]; color=_pp_cols[j], label="Agent $j", lw=2.0)
+        plot!(px_base,  t, baseline[j].x_ref[1, :];    color=_pp_cols[j], lw=1.2, linestyle=:dash, label="")
+        plot!(px_coord, t, coordinated[j].x_ref[1, :]; color=_pp_cols[j], lw=1.2, linestyle=:dash, label="")
     end
 
-    plot!(pe_base, t, _err(baseline); color=:crimson)
-    plot!(pe_coord, t, _err(coordinated); color=:steelblue)
+    plot!(pe_base,  t, _err(baseline);    color=_pp_cols[1], lw=2.0)
+    plot!(pe_coord, t, _err(coordinated); color=_pp_cols[2], lw=2.0)
 
-    return plot(pz_base, pz_coord, pe_base, pe_coord;
-                layout=(2, 2), size=(1000, 600), plot_title=title)
+    return plot(px_base, px_coord, pe_base, pe_coord;
+                layout=(2, 2), size=(900, 720), plot_title=title,
+                fontfamily="Computer Modern", thickness_scaling=1.5,
+                left_margin=margin, bottom_margin=8Plots.mm,
+                top_margin=4Plots.mm, right_margin=4Plots.mm)
 end
 
 end # module

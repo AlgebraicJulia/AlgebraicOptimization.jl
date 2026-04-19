@@ -143,6 +143,11 @@ function run_unicycle_sim(
 end
 
 # ── Plotting ───────────────────────────────────────────────────────────────────
+# Palette matches PaperPlotting.jl: orange, blue, green, purple
+const _pp_cols = [RGB(223/255,167/255,119/255),
+                  RGB(97/255,136/255,178/255),
+                  RGB(172/255,207/255,146/255),
+                  RGB(216/255,201/255,238/255)]
 
 """
     plot_unicycle_tracking(rec; title) -> Plot
@@ -151,20 +156,22 @@ Three-panel: lateral error, heading error, yaw rate vs time.
 """
 function plot_unicycle_tracking(rec::SimRecord; title::String = "Unicycle Path Tracking")
     p1 = plot(rec.t, rec.x[1, :];
-        label="e_y (m)", ylabel="Lateral error (m)",
-        left_margin=8Plots.mm, bottom_margin=5Plots.mm)
-    hline!(p1, [0.0]; linestyle=:dash, color=:black, label="")
+        label="e_y (m)", ylabel="Lateral error (m)", linewidth=2.0, color=_pp_cols[2],
+        fontfamily="Computer Modern", left_margin=8Plots.mm, bottom_margin=5Plots.mm)
+    hline!(p1, [0.0]; linestyle=:dash, color=:gray60, label="")
 
     p2 = plot(rec.t, rad2deg.(rec.x[2, :]);
-        label="e_ψ (°)", ylabel="Heading error (°)",
-        left_margin=8Plots.mm, bottom_margin=5Plots.mm)
-    hline!(p2, [0.0]; linestyle=:dash, color=:black, label="")
+        label="e_ψ (°)", ylabel="Heading error (°)", linewidth=2.0, color=_pp_cols[2],
+        fontfamily="Computer Modern", left_margin=8Plots.mm, bottom_margin=5Plots.mm)
+    hline!(p2, [0.0]; linestyle=:dash, color=:gray60, label="")
 
     p3 = plot(rec.t, rec.u[1, :];
         label="ω (rad/s)", ylabel="Yaw rate (rad/s)", xlabel="Time (s)",
-        left_margin=8Plots.mm, bottom_margin=5Plots.mm)
+        linewidth=2.0, color=_pp_cols[2],
+        fontfamily="Computer Modern", left_margin=8Plots.mm, bottom_margin=5Plots.mm)
 
-    return plot(p1, p2, p3; layout=(3, 1), plot_title=title, size=(800, 600))
+    return plot(p1, p2, p3; layout=(3, 1), plot_title=title, size=(800, 600),
+                fontfamily="Computer Modern", thickness_scaling=1.5)
 end
 
 """
@@ -179,21 +186,25 @@ function compare_unicycle_runs(
     label2::String = "LQR",
     title::String = "PID vs LQR",
 )
-    p1 = plot(rec1.t, rec1.x[1, :]; label=label1, ylabel="Lateral error e_y (m)",
-              left_margin=8Plots.mm, bottom_margin=5Plots.mm)
-    plot!(p1, rec2.t, rec2.x[1, :]; label=label2)
-    hline!(p1, [0.0]; linestyle=:dash, color=:black, label="")
+    p1 = plot(rec1.t, rec1.x[1, :]; label=label1, color=_pp_cols[1], linewidth=2.0,
+              ylabel="Lateral error e_y (m)",
+              fontfamily="Computer Modern", left_margin=8Plots.mm, bottom_margin=5Plots.mm)
+    plot!(p1, rec2.t, rec2.x[1, :]; label=label2, color=_pp_cols[2], linewidth=2.0)
+    hline!(p1, [0.0]; linestyle=:dash, color=:gray60, label="")
 
-    p2 = plot(rec1.t, rad2deg.(rec1.x[2, :]); label=label1, ylabel="Heading error e_ψ (°)",
-              left_margin=8Plots.mm, bottom_margin=5Plots.mm)
-    plot!(p2, rec2.t, rad2deg.(rec2.x[2, :]); label=label2)
-    hline!(p2, [0.0]; linestyle=:dash, color=:black, label="")
+    p2 = plot(rec1.t, rad2deg.(rec1.x[2, :]); label=label1, color=_pp_cols[1], linewidth=2.0,
+              ylabel="Heading error e_ψ (°)",
+              fontfamily="Computer Modern", left_margin=8Plots.mm, bottom_margin=5Plots.mm)
+    plot!(p2, rec2.t, rad2deg.(rec2.x[2, :]); label=label2, color=_pp_cols[2], linewidth=2.0)
+    hline!(p2, [0.0]; linestyle=:dash, color=:gray60, label="")
 
-    p3 = plot(rec1.t, rec1.u[1, :]; label=label1, ylabel="Yaw rate ω (rad/s)",
-              xlabel="Time (s)", left_margin=8Plots.mm, bottom_margin=5Plots.mm)
-    plot!(p3, rec2.t, rec2.u[1, :]; label=label2)
+    p3 = plot(rec1.t, rec1.u[1, :]; label=label1, color=_pp_cols[1], linewidth=2.0,
+              ylabel="Yaw rate ω (rad/s)", xlabel="Time (s)",
+              fontfamily="Computer Modern", left_margin=8Plots.mm, bottom_margin=5Plots.mm)
+    plot!(p3, rec2.t, rec2.u[1, :]; label=label2, color=_pp_cols[2], linewidth=2.0)
 
-    return plot(p1, p2, p3; layout=(3, 1), plot_title=title, size=(800, 600))
+    return plot(p1, p2, p3; layout=(3, 1), plot_title=title, size=(800, 600),
+                fontfamily="Computer Modern", thickness_scaling=1.5)
 end
 
 end
